@@ -37,7 +37,23 @@ Do NOT:
 - Add "nice to have" code that wasn't discussed
 - Refactor unrelated code while implementing a feature
 
-### 4. Clean Code Principles
+### 4. Explain Choices and Teach
+
+The goal is learning, not just shipping. When writing code:
+
+- **Explain why** - Not just what the code does, but why this approach over alternatives
+- **Name the concepts** - If using a pattern (e.g., "this is the repository pattern"), name it so it can be researched
+- **Show alternatives** - When there are multiple valid approaches, briefly mention what they are and why this one was chosen
+- **Explain non-obvious APIs** - If using something like `tower::ServiceExt::oneshot()`, explain what it does and when you'd use it
+- **Link to docs** - When introducing a new crate or concept, mention where to learn more
+
+Examples of good explanations:
+- "Using `EnvFilter::from_default_env()` which reads RUST_LOG. Alternative: hardcoded filter, but env-based is more flexible for debugging."
+- "This is dependency injection via traits—the handler takes `impl UserRepository` so we can swap in a mock for tests."
+
+Don't over-explain obvious things, but err on the side of teaching when introducing new patterns or APIs.
+
+### 5. Clean Code Principles
 
 **High cohesion, low coupling:**
 - Each module should have a single, clear responsibility
@@ -55,7 +71,7 @@ Do NOT:
 - No abbreviations unless universally understood
 - Test names describe the behavior being tested: `test_rejects_invalid_reading`
 
-### 5. Code Structure
+### 6. Code Structure
 
 ```
 backend/
@@ -71,7 +87,7 @@ backend/
     └── integration/      # Integration tests
 ```
 
-### 6. When to Ask vs. Proceed
+### 7. When to Ask vs. Proceed
 
 **Ask first:**
 - Module boundaries and interfaces
@@ -86,7 +102,7 @@ backend/
 - Bug fixes with obvious solutions
 - Formatting/linting fixes
 
-### 7. Commit Style
+### 8. Commit Style
 
 - Small, focused commits
 - Imperative mood: "Add user registration endpoint"
