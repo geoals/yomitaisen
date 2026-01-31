@@ -6,8 +6,6 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> Self {
-        dotenvy::dotenv().ok();
-
         Self {
             port: env::var("PORT")
                 .ok()
