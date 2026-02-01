@@ -74,11 +74,18 @@
         .opponent {
             text-align: center;
             color: #666;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
+        }
+        .scores {
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 10px;
         }
         .result {
             text-align: center;
             padding: 20px;
+            font-size: 1.2rem;
         }
         .result.win {
             color: #28a745;
@@ -110,6 +117,20 @@
         .connection-status.disconnected {
             color: #dc3545;
         }
+        .game-over {
+            text-align: center;
+            padding: 30px;
+        }
+        .game-over h2 {
+            font-size: 2rem;
+            margin-bottom: 20px;
+        }
+        .game-over.win h2 {
+            color: #28a745;
+        }
+        .game-over.lose h2 {
+            color: #dc3545;
+        }
     </style>
 </head>
 <body>
@@ -130,16 +151,26 @@
         <!-- Game Screen -->
         <div id="game-screen" class="hidden">
             <div class="opponent">vs. <span id="opponent-name"></span></div>
+            <div class="scores"><span id="my-score">0</span> - <span id="their-score">0</span></div>
             <div class="round-info">Round <span id="round-number"></span></div>
             <div class="kanji" id="kanji"></div>
             <input type="text" id="answer" placeholder="Type reading in hiragana">
             <button id="submit-btn" onclick="submitAnswer()">Submit</button>
         </div>
 
-        <!-- Result Screen -->
+        <!-- Result Screen (brief, between rounds) -->
         <div id="result-screen" class="hidden">
             <div class="result" id="result-text"></div>
             <div class="correct-answer">Correct: <span id="correct-reading"></span></div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="game-over-screen" class="hidden">
+            <div class="game-over" id="game-over-content">
+                <h2 id="game-over-text"></h2>
+                <div class="scores" id="final-scores"></div>
+                <button onclick="location.reload()">Play Again</button>
+            </div>
         </div>
 
         <div class="connection-status" id="connection-status">Disconnected</div>
@@ -149,12 +180,20 @@
         const WS_URL = 'ws://localhost:3000/ws';
         let ws = null;
         let username = '';
+        let opponentName = '';
+        let myScore = 0;
+        let theirScore = 0;
 
         function showScreen(screenId) {
-            ['join-screen', 'waiting-screen', 'game-screen', 'result-screen'].forEach(id => {
+            ['join-screen', 'waiting-screen', 'game-screen', 'result-screen', 'game-over-screen'].forEach(id => {
                 document.getElementById(id).classList.add('hidden');
             });
             document.getElementById(screenId).classList.remove('hidden');
+        }
+
+        function updateScores() {
+            document.getElementById('my-score').textContent = myScore;
+            document.getElementById('their-score').textContent = theirScore;
         }
 
         function setConnectionStatus(connected) {
@@ -195,8 +234,11 @@
                     break;
 
                 case 'game_start':
-                    document.getElementById('opponent-name').textContent = msg.opponent;
-                    // Don't show game screen yet, wait for round_start
+                    opponentName = msg.opponent;
+                    document.getElementById('opponent-name').textContent = opponentName;
+                    myScore = 0;
+                    theirScore = 0;
+                    updateScores();
                     break;
 
                 case 'round_start':
@@ -204,25 +246,45 @@
                     document.getElementById('kanji').textContent = msg.kanji;
                     document.getElementById('answer').value = '';
                     document.getElementById('submit-btn').disabled = false;
+                    updateScores();
                     showScreen('game-screen');
                     document.getElementById('answer').focus();
                     break;
 
                 case 'round_result':
+                    // Update scores
+                    if (msg.winner === username) {
+                        myScore++;
+                    } else if (msg.winner) {
+                        theirScore++;
+                    }
+                    updateScores();
+
+                    // Show result briefly
                     const isWinner = msg.winner === username;
                     const resultEl = document.getElementById('result-text');
                     resultEl.textContent = msg.winner
-                        ? (isWinner ? 'You win!' : `${msg.winner} wins!`)
+                        ? (isWinner ? 'Correct!' : `${msg.winner} got it!`)
                         : 'Time out!';
                     resultEl.className = 'result ' + (isWinner ? 'win' : 'lose');
                     document.getElementById('correct-reading').textContent = msg.correct_reading;
                     showScreen('result-screen');
+                    // Next round will come automatically via round_start or game_end
                     break;
 
                 case 'wrong_answer':
                     document.getElementById('submit-btn').disabled = false;
                     document.getElementById('answer').value = '';
                     document.getElementById('answer').focus();
+                    break;
+
+                case 'game_end':
+                    const didWin = msg.winner === username;
+                    const gameOverContent = document.getElementById('game-over-content');
+                    gameOverContent.className = 'game-over ' + (didWin ? 'win' : 'lose');
+                    document.getElementById('game-over-text').textContent = didWin ? 'You Win!' : 'You Lose!';
+                    document.getElementById('final-scores').textContent = `${myScore} - ${theirScore}`;
+                    showScreen('game-over-screen');
                     break;
             }
         }
@@ -236,7 +298,6 @@
 
             if (!ws || ws.readyState !== WebSocket.OPEN) {
                 connect();
-                // Wait for connection, then send join
                 ws.onopen = () => {
                     setConnectionStatus(true);
                     sendJoin();
@@ -265,7 +326,6 @@
             document.getElementById('submit-btn').disabled = true;
         }
 
-        // Allow Enter key to submit
         document.getElementById('username').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') join();
         });
@@ -274,7 +334,6 @@
             if (e.key === 'Enter') submitAnswer();
         });
 
-        // Connect on page load
         connect();
     </script>
 </body>

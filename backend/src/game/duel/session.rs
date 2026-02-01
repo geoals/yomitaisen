@@ -19,10 +19,13 @@ pub struct RoundOutcome {
     pub correct_reading: String,
 }
 
+const WINS_NEEDED: u32 = 2;
+
 /// A game session between two players (pure logic, no I/O)
 pub struct GameSession {
     pub player1: String,
     pub player2: String,
+    scores: (u32, u32),
     current_round: Option<Round>,
 }
 
@@ -31,7 +34,28 @@ impl GameSession {
         Self {
             player1,
             player2,
+            scores: (0, 0),
             current_round: None,
+        }
+    }
+
+    pub fn scores(&self) -> (u32, u32) {
+        self.scores
+    }
+
+    pub fn record_win(&mut self, player_id: &str) {
+        match player_id {
+            id if id == self.player1 => self.scores.0 += 1,
+            id if id == self.player2 => self.scores.1 += 1,
+            _ => {}
+        }
+    }
+
+    pub fn game_winner(&self) -> Option<&str> {
+        match self.scores {
+            (p1, _) if p1 >= WINS_NEEDED => Some(&self.player1),
+            (_, p2) if p2 >= WINS_NEEDED => Some(&self.player2),
+            _ => None,
         }
     }
 
@@ -119,5 +143,25 @@ mod tests {
         let outcome = result.unwrap();
         assert_eq!(outcome.winner, Some("bob".to_string()));
         assert_eq!(outcome.correct_reading, "にほん");
+    }
+
+    #[test]
+    fn test_first_to_two_wins_game() {
+        let mut session = GameSession::new("alice".to_string(), "bob".to_string());
+
+        assert_eq!(session.scores(), (0, 0));
+        assert_eq!(session.game_winner(), None);
+
+        session.record_win("alice");
+        assert_eq!(session.scores(), (1, 0));
+        assert_eq!(session.game_winner(), None);
+
+        session.record_win("bob");
+        assert_eq!(session.scores(), (1, 1));
+        assert_eq!(session.game_winner(), None);
+
+        session.record_win("alice");
+        assert_eq!(session.scores(), (2, 1));
+        assert_eq!(session.game_winner(), Some("alice"));
     }
 }

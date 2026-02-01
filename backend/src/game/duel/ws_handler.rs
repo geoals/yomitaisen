@@ -102,7 +102,12 @@ impl DuelState {
         }
     }
 
-    fn submit_answer(&self, user_id: &str, answer: &str) -> Option<ServerMessage> {
+    /// Returns (RoundResult, game_winner, current_round_number) if answer is correct
+    fn submit_answer(
+        &self,
+        user_id: &str,
+        answer: &str,
+    ) -> Option<(ServerMessage, Option<String>, u32)> {
         let game_id = self.player_games.get(user_id)?;
         let mut game = self.games.get_mut(&*game_id)?;
 
@@ -110,17 +115,26 @@ impl DuelState {
 
         let outcome = game.session.submit_answer(user_id, answer)?;
 
-        info!(
-            user_id,
-            winner = ?outcome.winner,
-            correct_reading = outcome.correct_reading,
-            "Round ended"
-        );
+        // Record the win
+        if let Some(winner) = &outcome.winner {
+            game.session.record_win(winner);
+        }
 
-        Some(ServerMessage::RoundResult {
-            winner: outcome.winner,
-            correct_reading: outcome.correct_reading,
-        })
+        let scores = game.session.scores();
+        let game_winner = game.session.game_winner().map(|s| s.to_string());
+
+        info!(user_id, round_winner = ?outcome.winner, scores = ?scores, game_winner = ?game_winner, "Round ended");
+
+        let round_number = scores.0 + scores.1;
+
+        Some((
+            ServerMessage::RoundResult {
+                winner: outcome.winner,
+                correct_reading: outcome.correct_reading,
+            },
+            game_winner,
+            round_number,
+        ))
     }
 
     fn broadcast_to_game(&self, user_id: &str, msg: ServerMessage) {
@@ -206,7 +220,7 @@ async fn handle_message(
                 return;
             };
             debug!(user_id, answer, "Player answered");
-            handle_answer(user_id, &answer, state, tx);
+            handle_answer(user_id, &answer, state, tx).await;
         }
     }
 }
@@ -258,11 +272,52 @@ async fn handle_join(
     }
 }
 
-fn handle_answer(user_id: &str, answer: &str, state: &Arc<DuelState>, tx: &broadcast::Sender<ServerMessage>) {
-    let Some(result) = state.submit_answer(user_id, answer) else {
+async fn handle_answer(
+    user_id: &str,
+    answer: &str,
+    state: &Arc<DuelState>,
+    tx: &broadcast::Sender<ServerMessage>,
+) {
+    let Some((round_result, game_winner, round_number)) = state.submit_answer(user_id, answer)
+    else {
         debug!(user_id, answer, "Wrong answer");
         let _ = tx.send(ServerMessage::WrongAnswer);
         return;
     };
-    state.broadcast_to_game(user_id, result);
+
+    // Broadcast round result to both players
+    state.broadcast_to_game(user_id, round_result);
+
+    match game_winner {
+        Some(winner) => {
+            info!(winner, "Game ended");
+            state.broadcast_to_game(user_id, ServerMessage::GameEnd { winner });
+        }
+        None => {
+            // Start next round
+            if let Some(word) = state.words.get_random().await {
+                let next_round = round_number + 1;
+                info!(
+                    round = next_round,
+                    kanji = word.kanji,
+                    "Starting next round"
+                );
+
+                state.broadcast_to_game(
+                    user_id,
+                    ServerMessage::RoundStart {
+                        kanji: word.kanji.clone(),
+                        round: next_round,
+                    },
+                );
+
+                // Update game state with new round
+                if let Some(game_id) = state.player_games.get(user_id) {
+                    if let Some(mut game) = state.games.get_mut(&*game_id) {
+                        game.session.start_round(next_round, word);
+                    }
+                }
+            }
+        }
+    }
 }
