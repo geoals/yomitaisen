@@ -241,20 +241,34 @@
           placeholder="Enter your name"
           autofocus
         />
-        <button id="create-btn" onclick="createGame()">Create New Game</button>
 
-        <div class="divider">or join existing</div>
+        <!-- Default: Create game flow -->
+        <div id="create-flow">
+          <button id="create-btn" onclick="createGame()">Create New Game</button>
 
-        <input
-          type="text"
-          id="game-code-input"
-          placeholder="Enter game code"
-          maxlength="6"
-          style="text-transform: lowercase"
-        />
-        <button id="join-btn" class="secondary" onclick="joinGame()">
-          Join Game
-        </button>
+          <div class="divider">or join existing</div>
+
+          <input
+            type="text"
+            id="game-code-input"
+            placeholder="Enter game code"
+            maxlength="6"
+            style="text-transform: lowercase"
+          />
+          <button id="join-btn" class="secondary" onclick="joinGame()">
+            Join Game
+          </button>
+        </div>
+
+        <!-- Invite: Join game flow (shown when ?game=CODE in URL) -->
+        <div id="join-flow" class="hidden">
+          <div class="game-code-label">You've been invited to game:</div>
+          <div class="game-code" id="invite-game-code"></div>
+          <button id="join-invite-btn" onclick="joinGame()">Join Game</button>
+          <button class="secondary" style="margin-top: 12px" onclick="showCreateFlow()">
+            Create New Game Instead
+          </button>
+        </div>
       </div>
 
       <!-- Lobby Screen (waiting for opponent) -->
@@ -281,7 +295,7 @@
           Round <span id="round-number"></span> · <span id="timer">15</span>s
         </div>
         <div class="kanji" id="kanji"></div>
-        <input type="text" id="answer" placeholder="Type reading (romaji OK)" />
+        <input type="text" id="answer" placeholder="Type reading" />
         <button id="submit-btn" onclick="submitAnswer()">Submit</button>
       </div>
 
@@ -505,10 +519,11 @@
       }
 
       function backToLanding() {
-        history.replaceState(null, "", window.location.pathname);
+        showCreateFlow();
         showScreen("landing-screen");
         document.getElementById("create-btn").disabled = false;
         document.getElementById("join-btn").disabled = false;
+        document.getElementById("join-invite-btn").disabled = false;
       }
 
       async function createGame() {
@@ -528,7 +543,7 @@
             JSON.stringify({
               type: "create_game",
               player_name: playerName,
-            })
+            }),
           );
         } catch (err) {
           showError("Could not connect to server");
@@ -553,6 +568,7 @@
         }
 
         document.getElementById("join-btn").disabled = true;
+        document.getElementById("join-invite-btn").disabled = true;
 
         try {
           if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -563,11 +579,12 @@
               type: "join_game",
               game_id: code,
               player_name: playerName,
-            })
+            }),
           );
         } catch (err) {
           showError("Could not connect to server");
           document.getElementById("join-btn").disabled = false;
+          document.getElementById("join-invite-btn").disabled = false;
         }
       }
 
@@ -594,7 +611,7 @@
           JSON.stringify({
             type: "answer",
             answer: answer,
-          })
+          }),
         );
         document.getElementById("submit-btn").disabled = true;
       }
@@ -623,10 +640,24 @@
         if (e.key === "Enter") submitAnswer();
       });
 
+      function showCreateFlow() {
+        document.getElementById("create-flow").classList.remove("hidden");
+        document.getElementById("join-flow").classList.add("hidden");
+        document.getElementById("game-code-input").value = "";
+        history.replaceState(null, "", window.location.pathname);
+      }
+
+      function showJoinFlow(code) {
+        document.getElementById("create-flow").classList.add("hidden");
+        document.getElementById("join-flow").classList.remove("hidden");
+        document.getElementById("invite-game-code").textContent = code.toUpperCase();
+        document.getElementById("game-code-input").value = code;
+      }
+
       // Initialize
       const urlGameCode = getGameCodeFromURL();
       if (urlGameCode) {
-        document.getElementById("game-code-input").value = urlGameCode;
+        showJoinFlow(urlGameCode);
       }
 
       // Bind wanakana to answer input for real-time romaji→hiragana conversion
