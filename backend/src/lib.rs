@@ -46,17 +46,9 @@ pub fn app(pool: SqlitePool) -> Router {
 pub fn app_with_config(pool: SqlitePool, round_timeout: Option<Duration>) -> Router {
     let word_repo = WordRepository::new(pool);
 
-    let mut ephemeral_state = EphemeralState::new(word_repo.clone());
-    let mut matchmaking_state = MatchmakingState::new(word_repo);
-
-    if let Some(timeout) = round_timeout {
-        ephemeral_state = ephemeral_state.with_round_timeout(timeout);
-        matchmaking_state = matchmaking_state.with_round_timeout(timeout);
-    }
-
     let state = AppState {
-        ephemeral: Arc::new(ephemeral_state),
-        matchmaking: Arc::new(matchmaking_state),
+        ephemeral: Arc::new(EphemeralState::new(word_repo.clone(), round_timeout)),
+        matchmaking: Arc::new(MatchmakingState::new(word_repo, round_timeout)),
     };
 
     Router::new()

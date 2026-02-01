@@ -26,18 +26,11 @@ pub struct EphemeralState {
 }
 
 impl EphemeralState {
-    pub fn new(words: WordRepository) -> Self {
+    pub fn new(words: WordRepository, round_timeout: Option<Duration>) -> Self {
         Self {
-            registry: Arc::new(GameRegistry::new(words)),
+            registry: Arc::new(GameRegistry::new(words, round_timeout)),
             pending_games: DashMap::new(),
         }
-    }
-
-    pub fn with_round_timeout(mut self, timeout: Duration) -> Self {
-        self.registry = Arc::new(
-            GameRegistry::new(self.registry.words.clone()).with_round_timeout(timeout),
-        );
-        self
     }
 
     /// Create a new ephemeral game and return the game ID
@@ -106,25 +99,17 @@ impl EphemeralState {
             return;
         };
 
-        // Get opponent before removing game
-        let opponent_id = {
-            let Some(game) = self.registry.games.get(&game_id) else {
-                return;
-            };
-            game.session.opponent_of(user_id).map(|s| s.to_string())
+        // Get opponent and broadcast before removing game
+        let Some((_, game)) = self.registry.games.remove(&game_id) else {
+            return;
         };
 
-        // Remove game
-        self.registry.games.remove(&game_id);
+        let Some(opponent_id) = game.session.opponent_of(user_id) else {
+            return;
+        };
 
         // Notify opponent and clean up their mapping
-        if let Some(opponent_id) = opponent_id {
-            self.registry.player_games.remove(&opponent_id);
-
-            // Send disconnect message through the game's channel
-            if let Some(game) = self.registry.games.get(&game_id) {
-                game.broadcast(ServerMessage::OpponentDisconnected);
-            }
-        }
+        self.registry.player_games.remove(opponent_id);
+        game.broadcast(ServerMessage::OpponentDisconnected);
     }
 }

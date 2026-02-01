@@ -27,19 +27,12 @@ pub struct MatchmakingState {
 }
 
 impl MatchmakingState {
-    pub fn new(words: WordRepository) -> Self {
+    pub fn new(words: WordRepository, round_timeout: Option<Duration>) -> Self {
         Self {
-            registry: Arc::new(GameRegistry::new(words)),
+            registry: Arc::new(GameRegistry::new(words, round_timeout)),
             lobby: Lobby::new(),
             player_channels: DashMap::new(),
         }
-    }
-
-    pub fn with_round_timeout(mut self, timeout: Duration) -> Self {
-        self.registry = Arc::new(
-            GameRegistry::new(self.registry.words.clone()).with_round_timeout(timeout),
-        );
-        self
     }
 
     fn register_player(&self, user_id: &str, tx: broadcast::Sender<ServerMessage>) {

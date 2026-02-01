@@ -346,3 +346,37 @@ async fn duplicate_names_get_discriminator() {
         ServerMessage::OpponentJoined { opponent_name } if opponent_name == "Alice (2)"
     ));
 }
+
+#[tokio::test]
+async fn ephemeral_opponent_disconnect_notifies_remaining_player() {
+    let server = spawn_test_server().await;
+
+    // Host creates game
+    let (mut host_ws, _) = connect_async(&server.ephemeral_url()).await.unwrap();
+    host_ws.send(create_game_msg("Alice")).await.unwrap();
+
+    let game_id = match recv(&mut host_ws).await {
+        ServerMessage::GameCreated { game_id } => game_id,
+        other => panic!("Expected GameCreated, got {:?}", other),
+    };
+    assert_eq!(recv(&mut host_ws).await, ServerMessage::WaitingForOpponent);
+
+    // Guest joins
+    let (mut guest_ws, _) = connect_async(&server.ephemeral_url()).await.unwrap();
+    guest_ws.send(join_game_msg(&game_id, "Bob")).await.unwrap();
+
+    // Skip to game started
+    assert!(matches!(recv(&mut host_ws).await, ServerMessage::OpponentJoined { .. }));
+    assert!(matches!(recv(&mut host_ws).await, ServerMessage::GameStart { .. }));
+    assert!(matches!(recv(&mut host_ws).await, ServerMessage::RoundStart { .. }));
+
+    assert!(matches!(recv(&mut guest_ws).await, ServerMessage::GameStart { .. }));
+    assert!(matches!(recv(&mut guest_ws).await, ServerMessage::RoundStart { .. }));
+
+    // Guest disconnects
+    guest_ws.close(None).await.unwrap();
+
+    // Host should receive OpponentDisconnected
+    let msg = recv(&mut host_ws).await;
+    assert!(matches!(msg, ServerMessage::OpponentDisconnected));
+}

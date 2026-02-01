@@ -19,18 +19,13 @@ pub struct GameRegistry {
 }
 
 impl GameRegistry {
-    pub fn new(words: WordRepository) -> Self {
+    pub fn new(words: WordRepository, round_timeout: Option<Duration>) -> Self {
         Self {
             words,
             games: Arc::new(DashMap::new()),
             player_games: Arc::new(DashMap::new()),
-            round_timeout: DEFAULT_ROUND_TIMEOUT,
+            round_timeout: round_timeout.unwrap_or(DEFAULT_ROUND_TIMEOUT),
         }
-    }
-
-    pub fn with_round_timeout(mut self, timeout: Duration) -> Self {
-        self.round_timeout = timeout;
-        self
     }
 
     /// Broadcast a message to both players in a game
