@@ -1,369 +1,439 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>読み対戦 - Yomitaisen</title>
     <style>
-        * {
-            box-sizing: border-box;
-        }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        max-width: 400px;
+        margin: 40px auto;
+        padding: 20px;
+        background: #0a0a0a;
+        color: #f0f0f0;
+      }
+      .card {
+        background: #222222;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        border: 1px solid #444;
+      }
+      .logo {
+        display: block;
+        width: 280px;
+        height: auto;
+        margin: 0 auto 24px auto;
+      }
+      /* Visually hidden but accessible to screen readers */
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        border: 0;
+      }
+      .hidden {
+        display: none;
+      }
+      input[type="text"] {
+        width: 100%;
+        padding: 12px;
+        font-size: 1rem;
+        border: 2px solid #444;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        background: #252525;
+        color: #f0f0f0;
+      }
+      input[type="text"]:focus {
+        outline: none;
+        border-color: #dc143c;
+      }
+      input[type="text"]::placeholder {
+        color: #666;
+      }
+      button {
+        width: 100%;
+        padding: 12px;
+        font-size: 1rem;
+        background: #dc143c;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      button:hover {
+        background: #b01030;
+      }
+      button:disabled {
+        background: #333;
+        color: #666;
+        cursor: not-allowed;
+      }
+      .status {
+        text-align: center;
+        color: #888;
+        padding: 20px;
+      }
+      .kanji {
+        font-size: 4rem;
+        text-align: center;
+        padding: 30px;
+        background: #252525;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border: 1px solid #444;
+      }
+      .opponent {
+        text-align: center;
+        color: #888;
+        margin-bottom: 10px;
+      }
+      .scores {
+        text-align: center;
+        font-size: 1.5rem;
+        font-weight: bold;
+        margin-bottom: 10px;
+        color: #dc143c;
+      }
+      .result {
+        text-align: center;
+        padding: 20px;
+        font-size: 1.2rem;
+      }
+      .result.win {
+        color: #dc143c;
+      }
+      .result.lose {
+        color: #666;
+      }
+      .correct-answer {
+        text-align: center;
+        color: #888;
+        font-size: 1.2rem;
+        margin-top: 10px;
+      }
+      .round-info {
+        text-align: center;
+        color: #666;
+        font-size: 0.9rem;
+        margin-bottom: 10px;
+      }
+      .connection-status {
+        text-align: center;
+        font-size: 0.8rem;
+        color: #444;
+        margin-top: 20px;
+      }
+      .connection-status.connected {
+        color: #dc143c;
+      }
+      .connection-status.disconnected {
+        color: #666;
+      }
+      .game-over {
+        text-align: center;
+        padding: 30px;
+      }
+      .game-over h2 {
+        font-size: 2rem;
+        margin-bottom: 20px;
+      }
+      .game-over.win h2 {
+        color: #dc143c;
+      }
+      .game-over.lose h2 {
+        color: #666;
+      }
+
+      /* Mobile: same card color, no floating effect */
+      @media (max-width: 480px) {
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            max-width: 400px;
-            margin: 40px auto;
-            padding: 20px;
-            background: #f5f5f5;
+          margin: 0;
+          padding: 0;
+          max-width: 100%;
+          background: #222222;
         }
         .card {
-            background: white;
-            border-radius: 12px;
-            padding: 24px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+          border: none;
+          box-shadow: none;
+          border-radius: 0;
         }
-        h1 {
-            margin: 0 0 20px 0;
-            font-size: 1.5rem;
-            text-align: center;
-        }
-        .hidden {
-            display: none;
-        }
-        input[type="text"] {
-            width: 100%;
-            padding: 12px;
-            font-size: 1rem;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            margin-bottom: 12px;
-        }
-        input[type="text"]:focus {
-            outline: none;
-            border-color: #007aff;
-        }
-        button {
-            width: 100%;
-            padding: 12px;
-            font-size: 1rem;
-            background: #007aff;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-        button:hover {
-            background: #0056b3;
-        }
-        button:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-        .status {
-            text-align: center;
-            color: #666;
-            padding: 20px;
-        }
-        .kanji {
-            font-size: 4rem;
-            text-align: center;
-            padding: 30px;
-            background: #f9f9f9;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-        .opponent {
-            text-align: center;
-            color: #666;
-            margin-bottom: 10px;
-        }
-        .scores {
-            text-align: center;
-            font-size: 1.5rem;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
-        .result {
-            text-align: center;
-            padding: 20px;
-            font-size: 1.2rem;
-        }
-        .result.win {
-            color: #28a745;
-        }
-        .result.lose {
-            color: #dc3545;
-        }
-        .correct-answer {
-            text-align: center;
-            color: #666;
-            font-size: 1.2rem;
-            margin-top: 10px;
-        }
-        .round-info {
-            text-align: center;
-            color: #999;
-            font-size: 0.9rem;
-            margin-bottom: 10px;
-        }
-        .connection-status {
-            text-align: center;
-            font-size: 0.8rem;
-            color: #999;
-            margin-top: 20px;
-        }
-        .connection-status.connected {
-            color: #28a745;
-        }
-        .connection-status.disconnected {
-            color: #dc3545;
-        }
-        .game-over {
-            text-align: center;
-            padding: 30px;
-        }
-        .game-over h2 {
-            font-size: 2rem;
-            margin-bottom: 20px;
-        }
-        .game-over.win h2 {
-            color: #28a745;
-        }
-        .game-over.lose h2 {
-            color: #dc3545;
-        }
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="card">
-        <h1><ruby>読み対戦<rp>(</rp><rt>yomitaisen</rt><rp>)</rp></ruby></h1>
+      <img src="logo.svg" alt="" class="logo" aria-hidden="true" />
+      <h1 class="sr-only">読み対戦 (Yomitaisen)</h1>
 
-        <!-- Join Screen -->
-        <div id="join-screen">
-            <input type="text" id="username" placeholder="Enter username" autofocus>
-            <button id="join-btn" onclick="join()">Join Game</button>
+      <!-- Join Screen -->
+      <div id="join-screen">
+        <input
+          type="text"
+          id="username"
+          placeholder="Enter username"
+          autofocus
+        />
+        <button id="join-btn" onclick="join()">Join Game</button>
+      </div>
+
+      <!-- Waiting Screen -->
+      <div id="waiting-screen" class="hidden">
+        <div class="status">Waiting for opponent...</div>
+      </div>
+
+      <!-- Game Screen -->
+      <div id="game-screen" class="hidden">
+        <div class="opponent">vs. <span id="opponent-name"></span></div>
+        <div class="scores">
+          <span id="my-score">0</span> - <span id="their-score">0</span>
         </div>
-
-        <!-- Waiting Screen -->
-        <div id="waiting-screen" class="hidden">
-            <div class="status">Waiting for opponent...</div>
+        <div class="round-info">
+          Round <span id="round-number"></span> · <span id="timer">30</span>s
         </div>
+        <div class="kanji" id="kanji"></div>
+        <input type="text" id="answer" placeholder="Type reading in hiragana" />
+        <button id="submit-btn" onclick="submitAnswer()">Submit</button>
+      </div>
 
-        <!-- Game Screen -->
-        <div id="game-screen" class="hidden">
-            <div class="opponent">vs. <span id="opponent-name"></span></div>
-            <div class="scores"><span id="my-score">0</span> - <span id="their-score">0</span></div>
-            <div class="round-info">Round <span id="round-number"></span> · <span id="timer">30</span>s</div>
-            <div class="kanji" id="kanji"></div>
-            <input type="text" id="answer" placeholder="Type reading in hiragana">
-            <button id="submit-btn" onclick="submitAnswer()">Submit</button>
+      <!-- Result Screen (brief, between rounds) -->
+      <div id="result-screen" class="hidden">
+        <div class="result" id="result-text"></div>
+        <div class="correct-answer">
+          Correct: <span id="correct-reading"></span>
         </div>
+      </div>
 
-        <!-- Result Screen (brief, between rounds) -->
-        <div id="result-screen" class="hidden">
-            <div class="result" id="result-text"></div>
-            <div class="correct-answer">Correct: <span id="correct-reading"></span></div>
+      <!-- Game Over Screen -->
+      <div id="game-over-screen" class="hidden">
+        <div class="game-over" id="game-over-content">
+          <h2 id="game-over-text"></h2>
+          <div class="scores" id="final-scores"></div>
+          <button onclick="location.reload()">Play Again</button>
         </div>
+      </div>
 
-        <!-- Game Over Screen -->
-        <div id="game-over-screen" class="hidden">
-            <div class="game-over" id="game-over-content">
-                <h2 id="game-over-text"></h2>
-                <div class="scores" id="final-scores"></div>
-                <button onclick="location.reload()">Play Again</button>
-            </div>
-        </div>
-
-        <div class="connection-status" id="connection-status">Disconnected</div>
+      <div class="connection-status" id="connection-status">Disconnected</div>
     </div>
 
     <script>
-        const WS_URL = 'ws://localhost:3000/ws';
-        const ROUND_TIMEOUT = 15;
-        let ws = null;
-        let username = '';
-        let opponentName = '';
-        let myScore = 0;
-        let theirScore = 0;
-        let timerInterval = null;
-        let timeLeft = ROUND_TIMEOUT;
+      const WS_URL = "ws://localhost:3000/ws";
+      const ROUND_TIMEOUT = 15;
+      let ws = null;
+      let username = "";
+      let opponentName = "";
+      let myScore = 0;
+      let theirScore = 0;
+      let timerInterval = null;
+      let timeLeft = ROUND_TIMEOUT;
 
-        function startTimer() {
+      function startTimer() {
+        stopTimer();
+        timeLeft = ROUND_TIMEOUT;
+        document.getElementById("timer").textContent = timeLeft;
+        timerInterval = setInterval(() => {
+          timeLeft--;
+          document.getElementById("timer").textContent = timeLeft;
+          if (timeLeft <= 0) stopTimer();
+        }, 1000);
+      }
+
+      function stopTimer() {
+        if (timerInterval) {
+          clearInterval(timerInterval);
+          timerInterval = null;
+        }
+      }
+
+      function showScreen(screenId) {
+        [
+          "join-screen",
+          "waiting-screen",
+          "game-screen",
+          "result-screen",
+          "game-over-screen",
+        ].forEach((id) => {
+          document.getElementById(id).classList.add("hidden");
+        });
+        document.getElementById(screenId).classList.remove("hidden");
+      }
+
+      function updateScores() {
+        document.getElementById("my-score").textContent = myScore;
+        document.getElementById("their-score").textContent = theirScore;
+      }
+
+      function setConnectionStatus(connected) {
+        const el = document.getElementById("connection-status");
+        el.textContent = connected ? "Connected" : "Disconnected";
+        el.className =
+          "connection-status " + (connected ? "connected" : "disconnected");
+      }
+
+      function connect() {
+        ws = new WebSocket(WS_URL);
+
+        ws.onopen = () => {
+          console.log("Connected to server");
+          setConnectionStatus(true);
+        };
+
+        ws.onclose = () => {
+          console.log("Disconnected from server");
+          setConnectionStatus(false);
+        };
+
+        ws.onerror = (err) => {
+          console.error("WebSocket error:", err);
+          setConnectionStatus(false);
+        };
+
+        ws.onmessage = (event) => {
+          const msg = JSON.parse(event.data);
+          console.log("Received:", msg);
+          handleMessage(msg);
+        };
+      }
+
+      function handleMessage(msg) {
+        switch (msg.type) {
+          case "waiting":
+            showScreen("waiting-screen");
+            break;
+
+          case "game_start":
+            opponentName = msg.opponent;
+            document.getElementById("opponent-name").textContent = opponentName;
+            myScore = 0;
+            theirScore = 0;
+            updateScores();
+            break;
+
+          case "round_start":
+            document.getElementById("round-number").textContent = msg.round;
+            document.getElementById("kanji").textContent = msg.kanji;
+            document.getElementById("answer").value = "";
+            document.getElementById("submit-btn").disabled = false;
+            updateScores();
+            showScreen("game-screen");
+            document.getElementById("answer").focus();
+            startTimer();
+            break;
+
+          case "round_result":
             stopTimer();
-            timeLeft = ROUND_TIMEOUT;
-            document.getElementById('timer').textContent = timeLeft;
-            timerInterval = setInterval(() => {
-                timeLeft--;
-                document.getElementById('timer').textContent = timeLeft;
-                if (timeLeft <= 0) stopTimer();
-            }, 1000);
-        }
-
-        function stopTimer() {
-            if (timerInterval) {
-                clearInterval(timerInterval);
-                timerInterval = null;
+            // Update scores
+            if (msg.winner === username) {
+              myScore++;
+            } else if (msg.winner) {
+              theirScore++;
             }
+            updateScores();
+
+            // Show result briefly
+            const isWinner = msg.winner === username;
+            const resultEl = document.getElementById("result-text");
+            resultEl.textContent = msg.winner
+              ? isWinner
+                ? "Correct!"
+                : `${msg.winner} got it!`
+              : "Time out!";
+            resultEl.className = "result " + (isWinner ? "win" : "lose");
+            document.getElementById("correct-reading").textContent =
+              msg.correct_reading;
+            showScreen("result-screen");
+            // Next round will come automatically via round_start or game_end
+            break;
+
+          case "wrong_answer":
+            document.getElementById("submit-btn").disabled = false;
+            document.getElementById("answer").value = "";
+            document.getElementById("answer").focus();
+            break;
+
+          case "game_end":
+            stopTimer();
+            const didWin = msg.winner === username;
+            const gameOverContent =
+              document.getElementById("game-over-content");
+            gameOverContent.className =
+              "game-over " + (didWin ? "win" : "lose");
+            document.getElementById("game-over-text").textContent = didWin
+              ? "You Win!"
+              : "You Lose!";
+            document.getElementById("final-scores").textContent =
+              `${myScore} - ${theirScore}`;
+            showScreen("game-over-screen");
+            break;
+
+          case "opponent_disconnected":
+            alert("Opponent disconnected");
+            location.reload();
+            break;
+        }
+      }
+
+      function join() {
+        username = document.getElementById("username").value.trim();
+        if (!username) {
+          alert("Please enter a username");
+          return;
         }
 
-        function showScreen(screenId) {
-            ['join-screen', 'waiting-screen', 'game-screen', 'result-screen', 'game-over-screen'].forEach(id => {
-                document.getElementById(id).classList.add('hidden');
-            });
-            document.getElementById(screenId).classList.remove('hidden');
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          connect();
+          ws.onopen = () => {
+            setConnectionStatus(true);
+            sendJoin();
+          };
+        } else {
+          sendJoin();
         }
+      }
 
-        function updateScores() {
-            document.getElementById('my-score').textContent = myScore;
-            document.getElementById('their-score').textContent = theirScore;
-        }
+      function sendJoin() {
+        ws.send(
+          JSON.stringify({
+            type: "join",
+            user_id: username,
+          }),
+        );
+        document.getElementById("join-btn").disabled = true;
+      }
 
-        function setConnectionStatus(connected) {
-            const el = document.getElementById('connection-status');
-            el.textContent = connected ? 'Connected' : 'Disconnected';
-            el.className = 'connection-status ' + (connected ? 'connected' : 'disconnected');
-        }
+      function submitAnswer() {
+        const answer = document.getElementById("answer").value.trim();
+        if (!answer) return;
 
-        function connect() {
-            ws = new WebSocket(WS_URL);
+        ws.send(
+          JSON.stringify({
+            type: "answer",
+            answer: answer,
+          }),
+        );
+        document.getElementById("submit-btn").disabled = true;
+      }
 
-            ws.onopen = () => {
-                console.log('Connected to server');
-                setConnectionStatus(true);
-            };
+      document.getElementById("username").addEventListener("keypress", (e) => {
+        if (e.key === "Enter") join();
+      });
 
-            ws.onclose = () => {
-                console.log('Disconnected from server');
-                setConnectionStatus(false);
-            };
+      document.getElementById("answer").addEventListener("keypress", (e) => {
+        if (e.key === "Enter") submitAnswer();
+      });
 
-            ws.onerror = (err) => {
-                console.error('WebSocket error:', err);
-                setConnectionStatus(false);
-            };
-
-            ws.onmessage = (event) => {
-                const msg = JSON.parse(event.data);
-                console.log('Received:', msg);
-                handleMessage(msg);
-            };
-        }
-
-        function handleMessage(msg) {
-            switch (msg.type) {
-                case 'waiting':
-                    showScreen('waiting-screen');
-                    break;
-
-                case 'game_start':
-                    opponentName = msg.opponent;
-                    document.getElementById('opponent-name').textContent = opponentName;
-                    myScore = 0;
-                    theirScore = 0;
-                    updateScores();
-                    break;
-
-                case 'round_start':
-                    document.getElementById('round-number').textContent = msg.round;
-                    document.getElementById('kanji').textContent = msg.kanji;
-                    document.getElementById('answer').value = '';
-                    document.getElementById('submit-btn').disabled = false;
-                    updateScores();
-                    showScreen('game-screen');
-                    document.getElementById('answer').focus();
-                    startTimer();
-                    break;
-
-                case 'round_result':
-                    stopTimer();
-                    // Update scores
-                    if (msg.winner === username) {
-                        myScore++;
-                    } else if (msg.winner) {
-                        theirScore++;
-                    }
-                    updateScores();
-
-                    // Show result briefly
-                    const isWinner = msg.winner === username;
-                    const resultEl = document.getElementById('result-text');
-                    resultEl.textContent = msg.winner
-                        ? (isWinner ? 'Correct!' : `${msg.winner} got it!`)
-                        : 'Time out!';
-                    resultEl.className = 'result ' + (isWinner ? 'win' : 'lose');
-                    document.getElementById('correct-reading').textContent = msg.correct_reading;
-                    showScreen('result-screen');
-                    // Next round will come automatically via round_start or game_end
-                    break;
-
-                case 'wrong_answer':
-                    document.getElementById('submit-btn').disabled = false;
-                    document.getElementById('answer').value = '';
-                    document.getElementById('answer').focus();
-                    break;
-
-                case 'game_end':
-                    stopTimer();
-                    const didWin = msg.winner === username;
-                    const gameOverContent = document.getElementById('game-over-content');
-                    gameOverContent.className = 'game-over ' + (didWin ? 'win' : 'lose');
-                    document.getElementById('game-over-text').textContent = didWin ? 'You Win!' : 'You Lose!';
-                    document.getElementById('final-scores').textContent = `${myScore} - ${theirScore}`;
-                    showScreen('game-over-screen');
-                    break;
-
-                case 'opponent_disconnected':
-                    alert('Opponent disconnected');
-                    location.reload();
-                    break;
-            }
-        }
-
-        function join() {
-            username = document.getElementById('username').value.trim();
-            if (!username) {
-                alert('Please enter a username');
-                return;
-            }
-
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                connect();
-                ws.onopen = () => {
-                    setConnectionStatus(true);
-                    sendJoin();
-                };
-            } else {
-                sendJoin();
-            }
-        }
-
-        function sendJoin() {
-            ws.send(JSON.stringify({
-                type: 'join',
-                user_id: username
-            }));
-            document.getElementById('join-btn').disabled = true;
-        }
-
-        function submitAnswer() {
-            const answer = document.getElementById('answer').value.trim();
-            if (!answer) return;
-
-            ws.send(JSON.stringify({
-                type: 'answer',
-                answer: answer
-            }));
-            document.getElementById('submit-btn').disabled = true;
-        }
-
-        document.getElementById('username').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') join();
-        });
-
-        document.getElementById('answer').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') submitAnswer();
-        });
-
-        connect();
+      connect();
     </script>
-</body>
+  </body>
 </html>
