@@ -1,6 +1,6 @@
 use tokio::sync::broadcast;
 
-use super::messages::ServerMessage;
+use crate::game::duel::messages::ServerMessage;
 use super::player::EphemeralPlayer;
 
 pub struct PendingGame {

@@ -1,6 +1,7 @@
 use super::word::Word;
 use sqlx::SqlitePool;
 
+#[derive(Clone)]
 pub struct WordRepository {
     pool: SqlitePool,
 }

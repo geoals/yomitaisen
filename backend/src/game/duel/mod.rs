@@ -1,9 +1,6 @@
-mod game_id;
-mod matchmaking;
+pub mod active_game;
 pub mod messages;
-mod pending_game;
-mod player;
-mod session;
-mod ws_handler;
+pub mod session;
 
-pub use ws_handler::{DuelState, handle_connection};
+// Re-exports used by ephemeral and matchmaking modules
+pub use active_game::CleanupGame;

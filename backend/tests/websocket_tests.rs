@@ -6,11 +6,25 @@ use yomitaisen::messages::{ClientMessage, ServerMessage};
 
 type WsStream = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 
-async fn spawn_test_server() -> String {
+struct TestServer {
+    base_url: String,
+}
+
+impl TestServer {
+    fn ephemeral_url(&self) -> String {
+        format!("{}/ws/ephemeral", self.base_url)
+    }
+
+    fn matchmaking_url(&self) -> String {
+        format!("{}/ws/matchmaking", self.base_url)
+    }
+}
+
+async fn spawn_test_server() -> TestServer {
     spawn_test_server_with_timeout(None).await
 }
 
-async fn spawn_test_server_with_timeout(round_timeout: Option<Duration>) -> String {
+async fn spawn_test_server_with_timeout(round_timeout: Option<Duration>) -> TestServer {
     let pool = sqlx::SqlitePool::connect(":memory:").await.unwrap();
     sqlx::migrate!().run(&pool).await.unwrap();
 
@@ -22,7 +36,9 @@ async fn spawn_test_server_with_timeout(round_timeout: Option<Duration>) -> Stri
         axum::serve(listener, app).await.unwrap();
     });
 
-    format!("ws://{}/ws", addr)
+    TestServer {
+        base_url: format!("ws://{}", addr),
+    }
 }
 
 fn join_msg(user_id: &str) -> Message {
@@ -63,10 +79,12 @@ async fn recv(ws: &mut WsStream) -> ServerMessage {
     serde_json::from_str(msg.to_text().unwrap()).unwrap()
 }
 
+// ============ Matchmaking tests ============
+
 #[tokio::test]
 async fn player_joins_and_receives_waiting() {
-    let url = spawn_test_server().await;
-    let (mut ws, _) = connect_async(&url).await.expect("Failed to connect");
+    let server = spawn_test_server().await;
+    let (mut ws, _) = connect_async(&server.matchmaking_url()).await.expect("Failed to connect");
 
     ws.send(join_msg("user-1")).await.unwrap();
 
@@ -75,13 +93,13 @@ async fn player_joins_and_receives_waiting() {
 
 #[tokio::test]
 async fn two_players_join_and_game_starts() {
-    let url = spawn_test_server().await;
+    let server = spawn_test_server().await;
 
-    let (mut ws1, _) = connect_async(&url).await.expect("Failed to connect");
+    let (mut ws1, _) = connect_async(&server.matchmaking_url()).await.expect("Failed to connect");
     ws1.send(join_msg("user-1")).await.unwrap();
     assert_eq!(recv(&mut ws1).await, ServerMessage::Waiting);
 
-    let (mut ws2, _) = connect_async(&url).await.expect("Failed to connect");
+    let (mut ws2, _) = connect_async(&server.matchmaking_url()).await.expect("Failed to connect");
     ws2.send(join_msg("user-2")).await.unwrap();
 
     assert!(matches!(recv(&mut ws1).await, ServerMessage::GameStart { .. }));
@@ -90,10 +108,10 @@ async fn two_players_join_and_game_starts() {
 
 #[tokio::test]
 async fn game_start_is_followed_by_round_start() {
-    let url = spawn_test_server().await;
+    let server = spawn_test_server().await;
 
-    let (mut ws1, _) = connect_async(&url).await.unwrap();
-    let (mut ws2, _) = connect_async(&url).await.unwrap();
+    let (mut ws1, _) = connect_async(&server.matchmaking_url()).await.unwrap();
+    let (mut ws2, _) = connect_async(&server.matchmaking_url()).await.unwrap();
 
     ws1.send(join_msg("user-1")).await.unwrap();
     ws2.send(join_msg("user-2")).await.unwrap();
@@ -112,10 +130,10 @@ async fn game_start_is_followed_by_round_start() {
 
 #[tokio::test]
 async fn correct_answer_wins_round() {
-    let url = spawn_test_server().await;
+    let server = spawn_test_server().await;
 
-    let (mut ws1, _) = connect_async(&url).await.unwrap();
-    let (mut ws2, _) = connect_async(&url).await.unwrap();
+    let (mut ws1, _) = connect_async(&server.matchmaking_url()).await.unwrap();
+    let (mut ws2, _) = connect_async(&server.matchmaking_url()).await.unwrap();
 
     ws1.send(join_msg("user-1")).await.unwrap();
     ws2.send(join_msg("user-2")).await.unwrap();
@@ -164,10 +182,10 @@ async fn correct_answer_wins_round() {
 
 #[tokio::test]
 async fn opponent_disconnect_notifies_remaining_player() {
-    let url = spawn_test_server().await;
+    let server = spawn_test_server().await;
 
-    let (mut ws1, _) = connect_async(&url).await.unwrap();
-    let (mut ws2, _) = connect_async(&url).await.unwrap();
+    let (mut ws1, _) = connect_async(&server.matchmaking_url()).await.unwrap();
+    let (mut ws2, _) = connect_async(&server.matchmaking_url()).await.unwrap();
 
     ws1.send(join_msg("user-1")).await.unwrap();
     ws2.send(join_msg("user-2")).await.unwrap();
@@ -191,10 +209,10 @@ async fn opponent_disconnect_notifies_remaining_player() {
 #[tokio::test]
 async fn round_times_out_with_no_winner() {
     // Use a short timeout for testing
-    let url = spawn_test_server_with_timeout(Some(Duration::from_millis(100))).await;
+    let server = spawn_test_server_with_timeout(Some(Duration::from_millis(100))).await;
 
-    let (mut ws1, _) = connect_async(&url).await.unwrap();
-    let (mut ws2, _) = connect_async(&url).await.unwrap();
+    let (mut ws1, _) = connect_async(&server.matchmaking_url()).await.unwrap();
+    let (mut ws2, _) = connect_async(&server.matchmaking_url()).await.unwrap();
 
     ws1.send(join_msg("user-1")).await.unwrap();
     ws2.send(join_msg("user-2")).await.unwrap();
@@ -239,8 +257,8 @@ async fn round_times_out_with_no_winner() {
 
 #[tokio::test]
 async fn create_game_returns_game_id_and_waits() {
-    let url = spawn_test_server().await;
-    let (mut ws, _) = connect_async(&url).await.expect("Failed to connect");
+    let server = spawn_test_server().await;
+    let (mut ws, _) = connect_async(&server.ephemeral_url()).await.expect("Failed to connect");
 
     ws.send(create_game_msg("Alice")).await.unwrap();
 
@@ -263,10 +281,10 @@ async fn create_game_returns_game_id_and_waits() {
 
 #[tokio::test]
 async fn join_game_starts_match() {
-    let url = spawn_test_server().await;
+    let server = spawn_test_server().await;
 
     // Host creates game
-    let (mut host_ws, _) = connect_async(&url).await.unwrap();
+    let (mut host_ws, _) = connect_async(&server.ephemeral_url()).await.unwrap();
     host_ws.send(create_game_msg("Alice")).await.unwrap();
 
     let game_id = match recv(&mut host_ws).await {
@@ -276,7 +294,7 @@ async fn join_game_starts_match() {
     assert_eq!(recv(&mut host_ws).await, ServerMessage::WaitingForOpponent);
 
     // Guest joins with game ID
-    let (mut guest_ws, _) = connect_async(&url).await.unwrap();
+    let (mut guest_ws, _) = connect_async(&server.ephemeral_url()).await.unwrap();
     guest_ws.send(join_game_msg(&game_id, "Bob")).await.unwrap();
 
     // Host receives OpponentJoined then GameStart
@@ -296,8 +314,8 @@ async fn join_game_starts_match() {
 
 #[tokio::test]
 async fn join_nonexistent_game_returns_not_found() {
-    let url = spawn_test_server().await;
-    let (mut ws, _) = connect_async(&url).await.unwrap();
+    let server = spawn_test_server().await;
+    let (mut ws, _) = connect_async(&server.ephemeral_url()).await.unwrap();
 
     ws.send(join_game_msg("xyz999", "Bob")).await.unwrap();
 
@@ -306,10 +324,10 @@ async fn join_nonexistent_game_returns_not_found() {
 
 #[tokio::test]
 async fn duplicate_names_get_discriminator() {
-    let url = spawn_test_server().await;
+    let server = spawn_test_server().await;
 
     // Host creates game as "Alice"
-    let (mut host_ws, _) = connect_async(&url).await.unwrap();
+    let (mut host_ws, _) = connect_async(&server.ephemeral_url()).await.unwrap();
     host_ws.send(create_game_msg("Alice")).await.unwrap();
 
     let game_id = match recv(&mut host_ws).await {
@@ -319,7 +337,7 @@ async fn duplicate_names_get_discriminator() {
     assert_eq!(recv(&mut host_ws).await, ServerMessage::WaitingForOpponent);
 
     // Guest joins with same name "Alice"
-    let (mut guest_ws, _) = connect_async(&url).await.unwrap();
+    let (mut guest_ws, _) = connect_async(&server.ephemeral_url()).await.unwrap();
     guest_ws.send(join_game_msg(&game_id, "Alice")).await.unwrap();
 
     // Host should see opponent as "Alice (2)"
