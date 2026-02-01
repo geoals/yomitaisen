@@ -203,4 +203,17 @@ async fn round_times_out_with_no_winner() {
         result2,
         ServerMessage::RoundResult { winner: None, .. }
     ));
+
+    // After timeout, next round should start (round 2, not round 1 again)
+    let next1 = recv(&mut ws1).await;
+    let next2 = recv(&mut ws2).await;
+
+    assert!(matches!(
+        next1,
+        ServerMessage::RoundStart { round: 2, .. }
+    ));
+    assert!(matches!(
+        next2,
+        ServerMessage::RoundStart { round: 2, .. }
+    ));
 }
