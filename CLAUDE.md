@@ -78,14 +78,18 @@ backend/
 ├── src/
 │   ├── main.rs           # Entry point, wiring
 │   ├── config.rs         # Configuration loading
-│   ├── routes/           # HTTP/WS handlers (thin, delegate to services)
-│   ├── services/         # Business logic
-│   ├── domain/           # Core types, no dependencies
-│   ├── repository/       # Database access traits + implementations
-│   └── lib.rs            # Re-exports for testing
+│   ├── lib.rs            # Router, re-exports
+│   └── game/
+│       ├── core/         # Shared types (Word, WordRepository)
+│       └── duel/         # 1v1 mode (matchmaking, session, ws_handler)
 └── tests/
-    └── integration/      # Integration tests
+    └── *.rs              # Integration tests
+
+frontend/
+└── index.html            # Vanilla JS UI
 ```
+
+Feature-based organization: each feature owns its domain types, data access, and handlers.
 
 ### 7. When to Ask vs. Proceed
 
@@ -104,10 +108,33 @@ backend/
 
 ### 8. Commit Style
 
-- Small, focused commits
-- Imperative mood: "Add user registration endpoint"
-- No need to describe tests unless the change is significant
-- Reference the feature/concern being worked on
+Use [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+<type>(<scope>): <description>
+
+[optional body]
+```
+
+**Types:**
+- `feat`: New feature
+- `fix`: Bug fix
+- `refactor`: Code restructuring (no behavior change)
+- `docs`: Documentation only
+- `test`: Adding/updating tests
+- `chore`: Build, deps, config, tooling
+
+**Scopes:** `game`, `duel`, `frontend`, `config`, `db`, or omit for broad changes
+
+**Examples:**
+```
+feat(duel): add answer checking and round result
+refactor(game): separate game logic from WebSocket handling
+fix(frontend): use snake_case for message types
+docs: update code structure in CLAUDE.md
+```
+
+Keep commits small and focused. One logical change per commit.
 
 ## Tech Stack Quick Reference
 
