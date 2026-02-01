@@ -16,11 +16,31 @@ services:
     expose:
       - "80"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./frontend:/srv/frontend:ro
+    configs:
+      - source: caddyfile
+        target: /etc/caddy/Caddyfile
     depends_on:
       - backend
     restart: unless-stopped
+
+configs:
+  caddyfile:
+    content: |
+      {
+        auto_https off
+      }
+      :80 {
+        root * /srv/frontend
+        file_server
+        handle /ws/* {
+          reverse_proxy backend:3000
+        }
+        handle /health {
+          reverse_proxy backend:3000
+        }
+        try_files {path} /index.html
+      }
 
 volumes:
   sqlite_data:
