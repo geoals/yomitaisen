@@ -98,6 +98,21 @@ impl GameSession {
             correct_reading,
         })
     }
+
+    /// Timeout the current round. Returns Some(outcome) if there was an active round.
+    pub fn timeout_round(&mut self) -> Option<RoundOutcome> {
+        let round = self.current_round.take()?;
+
+        Some(RoundOutcome {
+            winner: None,
+            correct_reading: round.word.reading,
+        })
+    }
+
+    /// Get the current round number, if any
+    pub fn current_round_number(&self) -> Option<u32> {
+        self.current_round.as_ref().map(|r| r.number)
+    }
 }
 
 #[cfg(test)]
@@ -143,6 +158,32 @@ mod tests {
         let outcome = result.unwrap();
         assert_eq!(outcome.winner, Some("bob".to_string()));
         assert_eq!(outcome.correct_reading, "にほん");
+    }
+
+    #[test]
+    fn test_timeout_round_ends_with_no_winner() {
+        let mut session = GameSession::new("alice".to_string(), "bob".to_string());
+        let word = Word {
+            kanji: "日本".to_string(),
+            reading: "にほん".to_string(),
+        };
+
+        session.start_round(1, word);
+
+        let result = session.timeout_round();
+        assert!(result.is_some());
+
+        let outcome = result.unwrap();
+        assert_eq!(outcome.winner, None);
+        assert_eq!(outcome.correct_reading, "にほん");
+    }
+
+    #[test]
+    fn test_timeout_round_returns_none_if_no_active_round() {
+        let mut session = GameSession::new("alice".to_string(), "bob".to_string());
+
+        let result = session.timeout_round();
+        assert!(result.is_none());
     }
 
     #[test]

@@ -152,7 +152,7 @@
         <div id="game-screen" class="hidden">
             <div class="opponent">vs. <span id="opponent-name"></span></div>
             <div class="scores"><span id="my-score">0</span> - <span id="their-score">0</span></div>
-            <div class="round-info">Round <span id="round-number"></span></div>
+            <div class="round-info">Round <span id="round-number"></span> · <span id="timer">30</span>s</div>
             <div class="kanji" id="kanji"></div>
             <input type="text" id="answer" placeholder="Type reading in hiragana">
             <button id="submit-btn" onclick="submitAnswer()">Submit</button>
@@ -178,11 +178,32 @@
 
     <script>
         const WS_URL = 'ws://localhost:3000/ws';
+        const ROUND_TIMEOUT = 15;
         let ws = null;
         let username = '';
         let opponentName = '';
         let myScore = 0;
         let theirScore = 0;
+        let timerInterval = null;
+        let timeLeft = ROUND_TIMEOUT;
+
+        function startTimer() {
+            stopTimer();
+            timeLeft = ROUND_TIMEOUT;
+            document.getElementById('timer').textContent = timeLeft;
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timer').textContent = timeLeft;
+                if (timeLeft <= 0) stopTimer();
+            }, 1000);
+        }
+
+        function stopTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+        }
 
         function showScreen(screenId) {
             ['join-screen', 'waiting-screen', 'game-screen', 'result-screen', 'game-over-screen'].forEach(id => {
@@ -249,9 +270,11 @@
                     updateScores();
                     showScreen('game-screen');
                     document.getElementById('answer').focus();
+                    startTimer();
                     break;
 
                 case 'round_result':
+                    stopTimer();
                     // Update scores
                     if (msg.winner === username) {
                         myScore++;
@@ -279,6 +302,7 @@
                     break;
 
                 case 'game_end':
+                    stopTimer();
                     const didWin = msg.winner === username;
                     const gameOverContent = document.getElementById('game-over-content');
                     gameOverContent.className = 'game-over ' + (didWin ? 'win' : 'lose');

@@ -1,4 +1,5 @@
 use futures_util::{SinkExt, StreamExt};
+use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungstenite::Message};
 use yomitaisen::messages::{ClientMessage, ServerMessage};
@@ -6,6 +7,10 @@ use yomitaisen::messages::{ClientMessage, ServerMessage};
 type WsStream = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 
 async fn spawn_test_server() -> String {
+    spawn_test_server_with_timeout(None).await
+}
+
+async fn spawn_test_server_with_timeout(round_timeout: Option<Duration>) -> String {
     let pool = sqlx::SqlitePool::connect(":memory:").await.unwrap();
     sqlx::migrate!().run(&pool).await.unwrap();
 
@@ -13,7 +18,7 @@ async fn spawn_test_server() -> String {
     let addr = listener.local_addr().unwrap();
 
     tokio::spawn(async move {
-        let app = yomitaisen::app(pool);
+        let app = yomitaisen::app_with_config(pool, round_timeout);
         axum::serve(listener, app).await.unwrap();
     });
 
@@ -164,4 +169,38 @@ async fn opponent_disconnect_notifies_remaining_player() {
     // Player 1 should receive OpponentDisconnected
     let msg = recv(&mut ws1).await;
     assert!(matches!(msg, ServerMessage::OpponentDisconnected));
+}
+
+#[tokio::test]
+async fn round_times_out_with_no_winner() {
+    // Use a short timeout for testing
+    let url = spawn_test_server_with_timeout(Some(Duration::from_millis(100))).await;
+
+    let (mut ws1, _) = connect_async(&url).await.unwrap();
+    let (mut ws2, _) = connect_async(&url).await.unwrap();
+
+    ws1.send(join_msg("user-1")).await.unwrap();
+    ws2.send(join_msg("user-2")).await.unwrap();
+
+    // Skip to round start
+    assert!(matches!(recv(&mut ws1).await, ServerMessage::Waiting));
+    assert!(matches!(recv(&mut ws1).await, ServerMessage::GameStart { .. }));
+    assert!(matches!(recv(&mut ws1).await, ServerMessage::RoundStart { .. }));
+
+    assert!(matches!(recv(&mut ws2).await, ServerMessage::GameStart { .. }));
+    assert!(matches!(recv(&mut ws2).await, ServerMessage::RoundStart { .. }));
+
+    // Don't answer - wait for timeout (100ms)
+    let result1 = recv(&mut ws1).await;
+    let result2 = recv(&mut ws2).await;
+
+    // Both should receive RoundResult with no winner
+    assert!(matches!(
+        result1,
+        ServerMessage::RoundResult { winner: None, .. }
+    ));
+    assert!(matches!(
+        result2,
+        ServerMessage::RoundResult { winner: None, .. }
+    ));
 }

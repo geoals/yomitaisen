@@ -11,6 +11,7 @@ use axum::{
 use game::{DuelState, WordRepository};
 use sqlx::SqlitePool;
 use std::sync::Arc;
+use std::time::Duration;
 
 async fn health() -> &'static str {
     "ok"
@@ -30,9 +31,17 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 }
 
 pub fn app(pool: SqlitePool) -> Router {
+    app_with_config(pool, None)
+}
+
+pub fn app_with_config(pool: SqlitePool, round_timeout: Option<Duration>) -> Router {
     let word_repo = WordRepository::new(pool);
+    let mut duel_state = DuelState::new(word_repo);
+    if let Some(timeout) = round_timeout {
+        duel_state = duel_state.with_round_timeout(timeout);
+    }
     let state = AppState {
-        game: Arc::new(DuelState::new(word_repo)),
+        game: Arc::new(duel_state),
     };
 
     Router::new()

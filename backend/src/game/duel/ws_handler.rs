@@ -6,8 +6,11 @@ use axum::extract::ws::{Message, WebSocket};
 use dashmap::DashMap;
 use futures_util::{SinkExt, StreamExt};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::broadcast;
 use tracing::{debug, info, warn};
+
+const DEFAULT_ROUND_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub struct DuelState {
     words: WordRepository,
@@ -15,6 +18,7 @@ pub struct DuelState {
     player_channels: DashMap<String, broadcast::Sender<ServerMessage>>,
     games: DashMap<String, ActiveGame>,
     player_games: DashMap<String, String>, // user_id -> game_id
+    round_timeout: Duration,
 }
 
 /// An active game: combines pure game logic with transport channels
@@ -56,7 +60,13 @@ impl DuelState {
             player_channels: DashMap::new(),
             games: DashMap::new(),
             player_games: DashMap::new(),
+            round_timeout: DEFAULT_ROUND_TIMEOUT,
         }
+    }
+
+    pub fn with_round_timeout(mut self, timeout: Duration) -> Self {
+        self.round_timeout = timeout;
+        self
     }
 
     fn register_player(&self, user_id: &str, tx: broadcast::Sender<ServerMessage>) {
@@ -312,6 +322,7 @@ async fn handle_join(
                 if let Some(mut game) = state.games.get_mut(&game_id) {
                     game.session.start_round(1, word);
                 }
+                spawn_round_timeout(state.clone(), game_id, 1);
             }
         }
     }
@@ -332,36 +343,88 @@ async fn handle_answer(
     // Broadcast round result to both players
     state.broadcast_to_game(user_id, result.round_result);
 
-    match result.game_winner {
+    // Get game_id for continue_or_end_game
+    let Some(game_id) = state.player_games.get(user_id).map(|r| r.clone()) else {
+        return;
+    };
+
+    continue_or_end_game(state, &game_id, result.game_winner, result.round_number).await;
+}
+
+fn spawn_round_timeout(state: Arc<DuelState>, game_id: String, round_number: u32) {
+    let timeout = state.round_timeout;
+    tokio::spawn(async move {
+        tokio::time::sleep(timeout).await;
+        handle_round_timeout(state, game_id, round_number).await;
+    });
+}
+
+async fn handle_round_timeout(state: Arc<DuelState>, game_id: String, round_number: u32) {
+    // Check if the round is still active and timeout it
+    let timeout_result = {
+        let Some(mut game) = state.games.get_mut(&game_id) else {
+            return;
+        };
+
+        // Only timeout if we're still on the same round
+        if game.session.current_round_number() != Some(round_number) {
+            return;
+        }
+
+        let Some(outcome) = game.session.timeout_round() else {
+            return;
+        };
+
+        info!(game_id, round_number, "Round timed out");
+
+        let scores = game.session.scores();
+        let game_winner = game.session.game_winner().map(|s| s.to_string());
+
+        game.broadcast(ServerMessage::RoundResult {
+            winner: outcome.winner,
+            correct_reading: outcome.correct_reading,
+        });
+
+        Some((scores.0 + scores.1, game_winner))
+    };
+
+    let Some((round_number, game_winner)) = timeout_result else {
+        return;
+    };
+
+    continue_or_end_game(&state, &game_id, game_winner, round_number).await;
+}
+
+async fn continue_or_end_game(
+    state: &Arc<DuelState>,
+    game_id: &str,
+    game_winner: Option<String>,
+    round_number: u32,
+) {
+    match game_winner {
         Some(winner) => {
             info!(winner, "Game ended");
-            state.broadcast_to_game(user_id, ServerMessage::GameEnd { winner });
+            if let Some(game) = state.games.get(game_id) {
+                game.broadcast(ServerMessage::GameEnd { winner });
+            }
         }
         None => {
-            // Start next round
-            if let Some(word) = state.words.get_random().await {
-                let next_round = result.round_number + 1;
-                info!(
-                    round = next_round,
-                    kanji = word.kanji,
-                    "Starting next round"
-                );
+            let Some(word) = state.words.get_random().await else {
+                return;
+            };
 
-                state.broadcast_to_game(
-                    user_id,
-                    ServerMessage::RoundStart {
-                        kanji: word.kanji.clone(),
-                        round: next_round,
-                    },
-                );
+            let next_round = round_number + 1;
+            info!(round = next_round, kanji = word.kanji, "Starting next round");
 
-                // Update game state with new round
-                if let Some(game_id) = state.player_games.get(user_id) {
-                    if let Some(mut game) = state.games.get_mut(&*game_id) {
-                        game.session.start_round(next_round, word);
-                    }
-                }
+            if let Some(mut game) = state.games.get_mut(game_id) {
+                game.broadcast(ServerMessage::RoundStart {
+                    kanji: word.kanji.clone(),
+                    round: next_round,
+                });
+                game.session.start_round(next_round, word);
             }
+
+            spawn_round_timeout(state.clone(), game_id.to_string(), next_round);
         }
     }
 }
