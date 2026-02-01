@@ -64,14 +64,27 @@ impl GameRegistry {
         Some(DisconnectInfo { game, opponent_id })
     }
 
-    /// Submit an answer and return the result if correct
-    pub fn submit_answer(&self, user_id: &str, answer: &str) -> Option<AnswerResult> {
+    /// Submit an answer and return the result if correct.
+    /// Validates the answer against the database to support multiple readings per kanji.
+    pub async fn submit_answer(&self, user_id: &str, answer: &str) -> Option<AnswerResult> {
         let game_id = self.player_games.get(user_id)?;
+
+        // Get the current kanji from the game (need to release lock before async call)
+        let kanji = {
+            let game = self.games.get(&*game_id)?;
+            game.session.current_kanji()?.to_string()
+        };
+
+        debug!(user_id, answer, kanji, "Player submitting answer");
+
+        // Validate answer against database (supports multiple readings)
+        if !self.words.is_valid_reading(&kanji, answer).await {
+            return None;
+        }
+
+        // Answer is valid - accept it
         let mut game = self.games.get_mut(&*game_id)?;
-
-        debug!(user_id, answer, "Player submitting answer");
-
-        let outcome = game.session.submit_answer(user_id, answer)?;
+        let outcome = game.session.accept_correct_answer(user_id)?;
 
         // Record the win
         if let Some(winner) = &outcome.winner {
@@ -108,7 +121,7 @@ impl GameRegistry {
         answer: &str,
         tx: &broadcast::Sender<ServerMessage>,
     ) {
-        let Some(result) = self.submit_answer(user_id, answer) else {
+        let Some(result) = self.submit_answer(user_id, answer).await else {
             debug!(user_id, answer, "Wrong answer");
             let _ = tx.send(ServerMessage::WrongAnswer);
             return;

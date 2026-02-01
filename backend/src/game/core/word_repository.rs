@@ -23,4 +23,17 @@ impl WordRepository {
             reading: row.1,
         })
     }
+
+    /// Check if the given reading is valid for the given kanji.
+    /// Returns true if there's a word entry with this kanji/reading pair.
+    pub async fn is_valid_reading(&self, kanji: &str, reading: &str) -> bool {
+        sqlx::query_scalar::<_, i32>("SELECT 1 FROM words WHERE kanji = ? AND reading = ?")
+            .bind(kanji)
+            .bind(reading)
+            .fetch_optional(&self.pool)
+            .await
+            .ok()
+            .flatten()
+            .is_some()
+    }
 }

@@ -113,6 +113,23 @@ impl GameSession {
     pub fn current_round_number(&self) -> Option<u32> {
         self.current_round.as_ref().map(|r| r.number)
     }
+
+    /// Get the current kanji being tested, if there's an active round
+    pub fn current_kanji(&self) -> Option<&str> {
+        self.current_round.as_ref().map(|r| r.word.kanji.as_str())
+    }
+
+    /// Accept a correct answer without validation (used when answer was validated externally).
+    /// Returns Some(outcome) if there was an active round.
+    pub fn accept_correct_answer(&mut self, player_id: &str) -> Option<RoundOutcome> {
+        let round = self.current_round.take()?;
+        let correct_reading = round.word.reading;
+
+        Some(RoundOutcome {
+            winner: Some(player_id.to_string()),
+            correct_reading,
+        })
+    }
 }
 
 #[cfg(test)]
