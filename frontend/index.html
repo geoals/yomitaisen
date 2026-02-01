@@ -6,6 +6,41 @@
     <title>読み対戦 - Yomitaisen</title>
     <script src="https://unpkg.com/wanakana"></script>
     <style>
+      :root {
+        /* Deep violet bg (280), purple accent (285) */
+        --hue: 285;
+        --hue-bg: 280;
+
+        /* Background layers - dark violet */
+        --bg-base: hsl(var(--hue-bg), 28%, 10%);
+        --bg-elevated: hsl(var(--hue-bg), 23%, 14%);
+        --bg-surface: hsl(var(--hue-bg), 18%, 18%);
+
+        /* Borders - subtle purple */
+        --border: hsl(var(--hue-bg), 25%, 21%);
+        --border-subtle: hsl(var(--hue-bg), 20%, 17%);
+
+        /* Text hierarchy - cool whites */
+        --text-primary: hsl(var(--hue-bg), 8%, 92%);
+        --text-secondary: hsl(var(--hue-bg), 12%, 55%);
+        --text-muted: hsl(var(--hue-bg), 10%, 38%);
+
+        /* Accent - purple-magenta */
+        --accent: hsl(307, 52%, 47%);
+        --accent-hover: hsl(307, 50%, 45%);
+        --accent-subtle: hsl(307, 40%, 18%);
+
+        /* Secondary button */
+        --secondary-bg: hsl(var(--hue-bg), 20%, 13%);
+        --secondary-hover: hsl(var(--hue-bg), 25%, 19%);
+        --secondary-border: hsl(var(--hue-bg), 30%, 25%);
+
+        /* States */
+        --disabled-bg: hsl(var(--hue-bg), 15%, 11%);
+        --disabled-text: hsl(var(--hue-bg), 10%, 33%);
+        --error: hsl(0, 70%, 55%);
+      }
+
       * {
         box-sizing: border-box;
       }
@@ -15,8 +50,8 @@
         max-width: 400px;
         margin: 0 auto;
         padding: 8px 20px 0;
-        background: #1a1a1a;
-        color: #f0f0f0;
+        background: var(--bg-base);
+        color: var(--text-primary);
         min-height: 100vh;
       }
       .card {
@@ -45,24 +80,24 @@
         width: 100%;
         padding: 12px;
         font-size: 1rem;
-        border: 2px solid #444;
+        border: 2px solid var(--border);
         border-radius: 8px;
         margin-bottom: 12px;
-        background: #252525;
-        color: #f0f0f0;
+        background: var(--bg-elevated);
+        color: var(--text-primary);
       }
       input[type="text"]:focus {
         outline: none;
-        border-color: #dc143c;
+        border-color: var(--accent);
       }
       input[type="text"]::placeholder {
-        color: #666;
+        color: var(--text-muted);
       }
       button {
         width: 100%;
         padding: 12px;
         font-size: 1rem;
-        background: #dc143c;
+        background: var(--accent);
         color: white;
         border: none;
         border-radius: 8px;
@@ -70,25 +105,25 @@
         font-weight: 600;
       }
       button:hover {
-        background: #b01030;
+        background: var(--accent-hover);
       }
       button:disabled {
-        background: #333;
-        color: #666;
+        background: var(--disabled-bg);
+        color: var(--disabled-text);
         cursor: not-allowed;
       }
       button.secondary {
-        background: #333;
-        color: #f0f0f0;
-        border: 1px solid #555;
+        background: var(--secondary-bg);
+        color: var(--text-primary);
+        border: 1px solid var(--secondary-border);
       }
       button.secondary:hover {
-        background: #444;
+        background: var(--secondary-hover);
       }
       .divider {
         display: flex;
         align-items: center;
-        color: #666;
+        color: var(--text-muted);
         margin: 20px 0;
         gap: 12px;
       }
@@ -97,11 +132,11 @@
         content: "";
         flex: 1;
         height: 1px;
-        background: #444;
+        background: var(--border);
       }
       .status {
         text-align: center;
-        color: #888;
+        color: var(--text-secondary);
         padding: 20px;
       }
       .game-code {
@@ -109,16 +144,16 @@
         font-size: 2.5rem;
         font-weight: bold;
         letter-spacing: 0.3em;
-        color: #dc143c;
+        color: var(--accent);
         padding: 20px;
-        background: #252525;
+        background: var(--bg-elevated);
         border-radius: 8px;
         margin: 20px 0;
         font-family: monospace;
       }
       .game-code-label {
         text-align: center;
-        color: #888;
+        color: var(--text-secondary);
         margin-bottom: 10px;
       }
       .copy-link {
@@ -128,14 +163,14 @@
         font-size: 4rem;
         text-align: center;
         padding: 30px;
-        background: #252525;
+        background: var(--bg-elevated);
         border-radius: 8px;
         margin-bottom: 20px;
-        border: 1px solid #444;
+        border: 1px solid var(--border-subtle);
       }
       .opponent {
         text-align: center;
-        color: #888;
+        color: var(--text-secondary);
         margin-bottom: 10px;
       }
       .scores {
@@ -143,7 +178,7 @@
         font-size: 1.5rem;
         font-weight: bold;
         margin-bottom: 10px;
-        color: #dc143c;
+        color: var(--accent);
       }
       .result {
         text-align: center;
@@ -151,34 +186,34 @@
         font-size: 1.2rem;
       }
       .result.win {
-        color: #dc143c;
+        color: var(--accent);
       }
       .result.lose {
-        color: #666;
+        color: var(--text-muted);
       }
       .correct-answer {
         text-align: center;
-        color: #888;
+        color: var(--text-secondary);
         font-size: 1.2rem;
         margin-top: 10px;
       }
       .round-info {
         text-align: center;
-        color: #666;
+        color: var(--text-muted);
         font-size: 0.9rem;
         margin-bottom: 10px;
       }
       .connection-status {
         text-align: center;
         font-size: 0.8rem;
-        color: #444;
+        color: var(--text-muted);
         margin-top: 20px;
       }
       .connection-status.connected {
-        color: #dc143c;
+        color: var(--accent);
       }
       .connection-status.disconnected {
-        color: #666;
+        color: var(--text-muted);
       }
       .game-over {
         text-align: center;
@@ -189,17 +224,17 @@
         margin-bottom: 20px;
       }
       .game-over.win h2 {
-        color: #dc143c;
+        color: var(--accent);
       }
       .game-over.lose h2 {
-        color: #666;
+        color: var(--text-muted);
       }
       .game-over.draw h2 {
-        color: #888;
+        color: var(--text-secondary);
       }
       .error-message {
         text-align: center;
-        color: #ff6b6b;
+        color: var(--error);
         padding: 20px;
       }
 
@@ -226,7 +261,9 @@
 
         <!-- Default: Create game flow -->
         <div id="create-flow">
-          <button id="create-btn" onclick="createGame()">Create New Game</button>
+          <button id="create-btn" onclick="createGame()">
+            Create New Game
+          </button>
 
           <div class="divider">or join existing</div>
 
@@ -629,7 +666,8 @@
       function showJoinFlow(code) {
         document.getElementById("create-flow").classList.add("hidden");
         document.getElementById("join-flow").classList.remove("hidden");
-        document.getElementById("invite-game-code").textContent = code.toUpperCase();
+        document.getElementById("invite-game-code").textContent =
+          code.toUpperCase();
         document.getElementById("game-code-input").value = code;
       }
 
