@@ -1,14 +1,14 @@
 use super::matchmaking::{Lobby, MatchOutcome};
+use super::messages::{ClientMessage, ServerMessage};
 use super::session::GameSession;
-use crate::messages::{ClientMessage, ServerMessage};
-use crate::repository::WordRepository;
+use crate::game::core::WordRepository;
 use axum::extract::ws::{Message, WebSocket};
 use dashmap::DashMap;
 use futures_util::{SinkExt, StreamExt};
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
-pub struct GameState {
+pub struct DuelState {
     words: WordRepository,
     lobby: Lobby,
     player_channels: DashMap<String, broadcast::Sender<ServerMessage>>,
@@ -40,7 +40,7 @@ enum JoinResult {
     },
 }
 
-impl GameState {
+impl DuelState {
     pub fn new(words: WordRepository) -> Self {
         Self {
             words,
@@ -116,7 +116,7 @@ impl GameState {
     }
 }
 
-pub async fn handle_connection(socket: WebSocket, state: Arc<GameState>) {
+pub async fn handle_connection(socket: WebSocket, state: Arc<DuelState>) {
     let (mut sender, receiver) = socket.split();
     let (tx, mut rx) = broadcast::channel::<ServerMessage>(16);
 
@@ -144,7 +144,7 @@ struct ConnectionContext {
 async fn handle_incoming(
     mut receiver: futures_util::stream::SplitStream<WebSocket>,
     tx: broadcast::Sender<ServerMessage>,
-    state: Arc<GameState>,
+    state: Arc<DuelState>,
 ) {
     let mut ctx = ConnectionContext { user_id: None };
 
@@ -162,7 +162,7 @@ async fn handle_incoming(
 async fn handle_message(
     msg: ClientMessage,
     tx: &broadcast::Sender<ServerMessage>,
-    state: &Arc<GameState>,
+    state: &Arc<DuelState>,
     ctx: &mut ConnectionContext,
 ) {
     match msg {
@@ -180,7 +180,7 @@ async fn handle_message(
 async fn handle_join(
     user_id: String,
     tx: &broadcast::Sender<ServerMessage>,
-    state: &Arc<GameState>,
+    state: &Arc<DuelState>,
 ) {
     match state.try_join(user_id.clone(), tx.clone()) {
         JoinResult::Waiting => {
@@ -212,7 +212,7 @@ async fn handle_join(
     }
 }
 
-fn handle_answer(user_id: &str, answer: &str, state: &Arc<GameState>) {
+fn handle_answer(user_id: &str, answer: &str, state: &Arc<DuelState>) {
     let Some(result) = state.submit_answer(user_id, answer) else {
         return;
     };

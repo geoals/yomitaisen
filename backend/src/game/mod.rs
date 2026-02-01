@@ -1,5 +1,5 @@
-mod matchmaking;
-mod session;
-mod ws_handler;
+pub mod core;
+pub mod duel;
 
-pub use ws_handler::{GameState, handle_connection};
+pub use core::WordRepository;
+pub use duel::{DuelState, handle_connection, messages};

@@ -1,4 +1,4 @@
-use crate::repository::Word;
+use crate::game::core::Word;
 
 /// A single round in the game
 pub struct Round {
