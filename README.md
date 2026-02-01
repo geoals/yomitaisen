@@ -6,6 +6,10 @@
 
 A real-time multiplayer kanji reading quiz game. Two players compete to type the correct reading (in hiragana) of displayed kanji words. First to 10 wins!
 
+<p align="center">
+  <img src="demo.png" alt="Game screenshot" width="400">
+</p>
+
 ## Current Features
 
 - **Real-time 1v1 gameplay** via WebSocket
