@@ -104,10 +104,12 @@ impl DuelState {
         tx: broadcast::Sender<ServerMessage>,
     ) -> Option<JoinedGame> {
         let (_, pending) = self.pending_games.remove(game_id)?;
-        let guest = EphemeralPlayer::new(&player_name);
 
-        // Create active game using player IDs
-        let session = GameSession::new(pending.host.id.clone(), guest.id.clone());
+        // Use display names as player IDs (consistent with authenticated flow)
+        let host_name = pending.host.display_name.clone();
+        let guest_name = player_name.clone();
+
+        let session = GameSession::new(host_name.clone(), guest_name.clone());
         let game = ActiveGame {
             session,
             player1_tx: pending.host_tx.clone(),
@@ -116,9 +118,9 @@ impl DuelState {
 
         self.games.insert(game_id.to_string(), game);
         self.player_games
-            .insert(pending.host.id.clone(), game_id.to_string());
+            .insert(host_name, game_id.to_string());
         self.player_games
-            .insert(guest.id.clone(), game_id.to_string());
+            .insert(guest_name, game_id.to_string());
 
         info!(
             game_id,
@@ -336,11 +338,13 @@ async fn handle_message(
             handle_join(user_id, tx, state).await;
         }
         ClientMessage::CreateGame { player_name } => {
+            ctx.user_id = Some(player_name.clone());
             let game_id = state.create_game(player_name, tx.clone());
             let _ = tx.send(ServerMessage::GameCreated { game_id });
             let _ = tx.send(ServerMessage::WaitingForOpponent);
         }
         ClientMessage::JoinGame { game_id, player_name } => {
+            ctx.user_id = Some(player_name.clone());
             let Some(joined) = state.join_game(&game_id, player_name, tx.clone()) else {
                 let _ = tx.send(ServerMessage::GameNotFound);
                 return;
