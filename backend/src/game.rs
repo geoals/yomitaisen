@@ -1,4 +1,5 @@
 use crate::messages::{ClientMessage, ServerMessage};
+use crate::repository::{Word, WordRepository};
 use axum::extract::ws::{Message, WebSocket};
 use dashmap::DashMap;
 use futures_util::{SinkExt, StreamExt};
@@ -6,6 +7,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 
 pub struct GameState {
+    words: WordRepository,
     waiting_player: std::sync::Mutex<Option<(String, broadcast::Sender<ServerMessage>)>>,
     games: DashMap<String, Game>,
 }
@@ -15,6 +17,8 @@ struct Game {
     player1: String,
     player2: String,
     tx: broadcast::Sender<ServerMessage>,
+    current_round: u32,
+    current_word: Option<Word>,
 }
 
 enum MatchResult {
@@ -22,12 +26,14 @@ enum MatchResult {
     Matched {
         opponent_id: String,
         opponent_tx: broadcast::Sender<ServerMessage>,
+        game_id: String,
     },
 }
 
 impl GameState {
-    pub fn new() -> Self {
+    pub fn new(words: WordRepository) -> Self {
         Self {
+            words,
             waiting_player: std::sync::Mutex::new(None),
             games: DashMap::new(),
         }
@@ -46,12 +52,15 @@ impl GameState {
             player1: opponent_id.clone(),
             player2: user_id,
             tx: tx.clone(),
+            current_round: 0,
+            current_word: None,
         };
-        self.games.insert(game_id, game);
+        self.games.insert(game_id.clone(), game);
 
         MatchResult::Matched {
             opponent_id,
             opponent_tx,
+            game_id,
         }
     }
 }
@@ -99,14 +108,18 @@ async fn handle_message(
     state: &Arc<GameState>,
 ) {
     match msg {
-        ClientMessage::Join { user_id } => handle_join(user_id, tx, state),
+        ClientMessage::Join { user_id } => handle_join(user_id, tx, state).await,
         ClientMessage::Answer { answer: _ } => {
             // TODO: Handle answer
         }
     }
 }
 
-fn handle_join(user_id: String, tx: &broadcast::Sender<ServerMessage>, state: &Arc<GameState>) {
+async fn handle_join(
+    user_id: String,
+    tx: &broadcast::Sender<ServerMessage>,
+    state: &Arc<GameState>,
+) {
     match state.try_match(user_id.clone(), tx.clone()) {
         MatchResult::Waiting => {
             let _ = tx.send(ServerMessage::Waiting);
@@ -114,11 +127,26 @@ fn handle_join(user_id: String, tx: &broadcast::Sender<ServerMessage>, state: &A
         MatchResult::Matched {
             opponent_id,
             opponent_tx,
+            game_id,
         } => {
             let _ = tx.send(ServerMessage::GameStart {
                 opponent: opponent_id,
             });
             let _ = opponent_tx.send(ServerMessage::GameStart { opponent: user_id });
+
+            if let Some(word) = state.words.get_random().await {
+                let round_msg = ServerMessage::RoundStart {
+                    kanji: word.kanji.clone(),
+                    round: 1,
+                };
+                let _ = tx.send(round_msg.clone());
+                let _ = opponent_tx.send(round_msg);
+
+                if let Some(mut game) = state.games.get_mut(&game_id) {
+                    game.current_round = 1;
+                    game.current_word = Some(word);
+                }
+            }
         }
     }
 }

@@ -1,5 +1,6 @@
 mod game;
 mod messages;
+mod repository;
 
 use axum::{
     Router,
@@ -8,6 +9,7 @@ use axum::{
     routing::get,
 };
 use game::GameState;
+use repository::WordRepository;
 use sqlx::SqlitePool;
 use std::sync::Arc;
 
@@ -17,7 +19,6 @@ async fn health() -> &'static str {
 
 #[derive(Clone)]
 pub struct AppState {
-    pub pool: SqlitePool,
     pub game: Arc<GameState>,
 }
 
@@ -30,9 +31,9 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 }
 
 pub fn app(pool: SqlitePool) -> Router {
+    let word_repo = WordRepository::new(pool);
     let state = AppState {
-        pool,
-        game: Arc::new(GameState::new()),
+        game: Arc::new(GameState::new(word_repo)),
     };
 
     Router::new()
