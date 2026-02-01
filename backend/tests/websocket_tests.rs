@@ -380,3 +380,80 @@ async fn ephemeral_opponent_disconnect_notifies_remaining_player() {
     let msg = recv(&mut host_ws).await;
     assert!(matches!(msg, ServerMessage::OpponentDisconnected));
 }
+
+fn rematch_msg() -> Message {
+    let json = serde_json::to_string(&ClientMessage::RequestRematch).unwrap();
+    Message::Text(json.into())
+}
+
+#[tokio::test]
+async fn rematch_starts_new_game_when_both_request() {
+    let server = spawn_test_server().await;
+
+    // Host creates game
+    let (mut host_ws, _) = connect_async(&server.ephemeral_url()).await.unwrap();
+    host_ws.send(create_game_msg("Alice")).await.unwrap();
+
+    let game_id = match recv(&mut host_ws).await {
+        ServerMessage::GameCreated { game_id } => game_id,
+        other => panic!("Expected GameCreated, got {:?}", other),
+    };
+    assert_eq!(recv(&mut host_ws).await, ServerMessage::WaitingForOpponent);
+
+    // Guest joins
+    let (mut guest_ws, _) = connect_async(&server.ephemeral_url()).await.unwrap();
+    guest_ws.send(join_game_msg(&game_id, "Bob")).await.unwrap();
+
+    // Skip to game started
+    assert!(matches!(recv(&mut host_ws).await, ServerMessage::OpponentJoined { .. }));
+    assert!(matches!(recv(&mut host_ws).await, ServerMessage::GameStart { .. }));
+
+    assert!(matches!(recv(&mut guest_ws).await, ServerMessage::GameStart { .. }));
+
+    // Win 15 rounds to end the game (WINS_NEEDED=15)
+    for _ in 0..15 {
+        let ServerMessage::RoundStart { kanji, .. } = recv(&mut host_ws).await else {
+            panic!("Expected RoundStart");
+        };
+        assert!(matches!(recv(&mut guest_ws).await, ServerMessage::RoundStart { .. }));
+
+        let correct_reading = match kanji.as_str() {
+            "日本" => "にほん",
+            "学校" => "がっこう",
+            "電話" => "でんわ",
+            "先生" => "せんせい",
+            "時間" => "じかん",
+            "食べる" => "たべる",
+            "飲む" => "のむ",
+            "書く" => "かく",
+            "読む" => "よむ",
+            "聞く" => "きく",
+            _ => panic!("Unknown kanji: {}", kanji),
+        };
+
+        host_ws.send(answer_msg(correct_reading)).await.unwrap();
+
+        // Both receive RoundResult
+        assert!(matches!(recv(&mut host_ws).await, ServerMessage::RoundResult { .. }));
+        assert!(matches!(recv(&mut guest_ws).await, ServerMessage::RoundResult { .. }));
+    }
+
+    // Both receive GameEnd (host won)
+    assert!(matches!(recv(&mut host_ws).await, ServerMessage::GameEnd { winner: Some(_) }));
+    assert!(matches!(recv(&mut guest_ws).await, ServerMessage::GameEnd { winner: Some(_) }));
+
+    // Now both request rematch
+    host_ws.send(rematch_msg()).await.unwrap();
+    // First player should receive RematchWaiting
+    assert!(matches!(recv(&mut host_ws).await, ServerMessage::RematchWaiting));
+
+    guest_ws.send(rematch_msg()).await.unwrap();
+
+    // Both should receive GameStart (to reset frontend state)
+    assert!(matches!(recv(&mut host_ws).await, ServerMessage::GameStart { .. }));
+    assert!(matches!(recv(&mut guest_ws).await, ServerMessage::GameStart { .. }));
+
+    // Then RoundStart for the new game
+    assert!(matches!(recv(&mut host_ws).await, ServerMessage::RoundStart { round: 1, .. }));
+    assert!(matches!(recv(&mut guest_ws).await, ServerMessage::RoundStart { round: 1, .. }));
+}

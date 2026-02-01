@@ -13,6 +13,7 @@ pub enum ClientMessage {
     // Shared
     Answer { answer: String },
     Skip,
+    RequestRematch,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -34,6 +35,7 @@ pub enum ServerMessage {
     RoundResult { winner: Option<String>, correct_reading: String },
     WrongAnswer,
     SkipWaiting,
+    RematchWaiting,
     OpponentDisconnected,
     GameEnd { winner: Option<String> },
     #[allow(dead_code)]

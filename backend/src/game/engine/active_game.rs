@@ -1,6 +1,6 @@
+use crate::game::core::WordRepository;
 use crate::game::core::messages::ServerMessage;
 use crate::game::core::session::GameSession;
-use crate::game::core::WordRepository;
 use dashmap::DashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -8,7 +8,7 @@ use tokio::sync::broadcast;
 use tracing::info;
 
 pub const DEFAULT_ROUND_TIMEOUT: Duration = Duration::from_secs(15);
-pub const MAX_ROUNDS: u32 = 50;
+pub const MAX_ROUNDS: u32 = 30;
 
 /// An active game: combines pure game logic with transport channels
 pub struct ActiveGame {
@@ -147,6 +147,7 @@ pub async fn continue_or_end_game(
     cleanup_game: Arc<dyn CleanupGame>,
 ) {
     // Check for winner or max rounds reached
+    // Note: We don't cleanup here to allow rematch. Cleanup happens on disconnect.
     if let Some(winner) = game_winner {
         info!(winner, "Game ended - winner by score");
         if let Some(game) = games.get(game_id) {
@@ -154,7 +155,6 @@ pub async fn continue_or_end_game(
                 winner: Some(winner),
             });
         }
-        cleanup_game.cleanup(game_id);
         return;
     }
 
@@ -169,7 +169,6 @@ pub async fn continue_or_end_game(
             };
             game.broadcast(ServerMessage::GameEnd { winner });
         }
-        cleanup_game.cleanup(game_id);
         return;
     }
 
@@ -179,7 +178,11 @@ pub async fn continue_or_end_game(
     };
 
     let next_round = round_number + 1;
-    info!(round = next_round, kanji = word.kanji, "Starting next round");
+    info!(
+        round = next_round,
+        kanji = word.kanji,
+        "Starting next round"
+    );
 
     if let Some(mut game) = games.get_mut(game_id) {
         game.broadcast(ServerMessage::RoundStart {

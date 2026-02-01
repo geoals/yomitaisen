@@ -251,4 +251,64 @@ impl GameRegistry {
             Arc::new(move |id: &str| registry.cleanup_game(id)),
         );
     }
+
+    /// Handle a player requesting a rematch
+    pub async fn handle_rematch(
+        self: &Arc<Self>,
+        user_id: &str,
+        tx: &broadcast::Sender<ServerMessage>,
+    ) {
+        let game_id = match self.player_games.get(user_id) {
+            Some(id) => id.clone(),
+            None => return,
+        };
+
+        let both_want_rematch = {
+            let Some(mut game) = self.games.get_mut(&game_id) else {
+                return;
+            };
+
+            match game.session.request_rematch(user_id) {
+                Some(true) => {
+                    // Both players want rematch - reset and start new game
+                    info!(user_id, "Both players want rematch, starting new game");
+                    game.session.reset_for_rematch();
+                    true
+                }
+                Some(false) => {
+                    // Waiting for opponent
+                    info!(user_id, "Player wants rematch, waiting for opponent");
+                    let _ = tx.send(ServerMessage::RematchWaiting);
+                    false
+                }
+                None => false,
+            }
+        };
+
+        if both_want_rematch {
+            // Start the new game - send GameStart to reset frontend state
+            let (player1, player2, player1_tx, player2_tx) = {
+                let Some(game) = self.games.get(&game_id) else {
+                    return;
+                };
+                (
+                    game.session.player1.clone(),
+                    game.session.player2.clone(),
+                    game.player1_tx.clone(),
+                    game.player2_tx.clone(),
+                )
+            };
+
+            // Send GameStart to both players (with each other as opponent)
+            let _ = player1_tx.send(ServerMessage::GameStart {
+                opponent: player2.clone(),
+            });
+            let _ = player2_tx.send(ServerMessage::GameStart {
+                opponent: player1.clone(),
+            });
+
+            self.start_first_round(&game_id, &player1_tx, &player2_tx)
+                .await;
+        }
+    }
 }

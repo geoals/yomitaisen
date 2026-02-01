@@ -33,6 +33,13 @@ impl ConnectionHandler for MatchmakingState {
                 };
                 self.registry.handle_skip(user_id, &tx).await;
             }
+            ClientMessage::RequestRematch => {
+                let Some(user_id) = &ctx.user_id else {
+                    warn!("Received rematch request from unknown user");
+                    return;
+                };
+                self.registry.handle_rematch(user_id, &tx).await;
+            }
             ClientMessage::CreateGame { .. } | ClientMessage::JoinGame { .. } => {
                 warn!("Received ephemeral game message on matchmaking endpoint");
                 let _ = tx.send(ServerMessage::Error {

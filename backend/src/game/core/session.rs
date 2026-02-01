@@ -32,7 +32,7 @@ pub enum SkipResult {
     BothSkipped(RoundOutcome),
 }
 
-const WINS_NEEDED: u32 = 15;
+const WINS_NEEDED: u32 = 1;
 
 /// A game session between two players (pure logic, no I/O)
 pub struct GameSession {
@@ -40,6 +40,8 @@ pub struct GameSession {
     pub player2: String,
     scores: (u32, u32),
     current_round: Option<Round>,
+    player1_wants_rematch: bool,
+    player2_wants_rematch: bool,
 }
 
 impl GameSession {
@@ -49,6 +51,8 @@ impl GameSession {
             player2,
             scores: (0, 0),
             current_round: None,
+            player1_wants_rematch: false,
+            player2_wants_rematch: false,
         }
     }
 
@@ -177,6 +181,27 @@ impl GameSession {
             winner: Some(player_id.to_string()),
             correct_reading,
         })
+    }
+
+    /// Record a player requesting a rematch. Returns true if both players want rematch.
+    pub fn request_rematch(&mut self, player_id: &str) -> Option<bool> {
+        if player_id == self.player1 {
+            self.player1_wants_rematch = true;
+        } else if player_id == self.player2 {
+            self.player2_wants_rematch = true;
+        } else {
+            return None;
+        }
+
+        Some(self.player1_wants_rematch && self.player2_wants_rematch)
+    }
+
+    /// Reset the game for a rematch
+    pub fn reset_for_rematch(&mut self) {
+        self.scores = (0, 0);
+        self.current_round = None;
+        self.player1_wants_rematch = false;
+        self.player2_wants_rematch = false;
     }
 }
 

@@ -62,7 +62,6 @@
         width: 280px;
         height: auto;
         margin: 0 auto;
-        transition: width 0.2s ease;
       }
       .logo.in-game {
         width: 180px;
@@ -284,11 +283,18 @@
   </head>
   <body>
     <div class="card">
-      <img src="logo.svg" alt="" class="logo" aria-hidden="true" onclick="goToLanding()" style="cursor: pointer;" />
+      <img
+        src="logo.svg"
+        alt=""
+        class="logo"
+        aria-hidden="true"
+        onclick="goToLanding()"
+        style="cursor: pointer"
+      />
       <h1 class="sr-only">読み対戦 (Yomitaisen)</h1>
 
       <!-- Landing Screen -->
-      <div id="landing-screen" style="margin-top: 24px;">
+      <div id="landing-screen" style="margin-top: 24px">
         <input
           type="text"
           id="player-name"
@@ -356,9 +362,18 @@
         </div>
         <div class="kanji" id="kanji" lang="ja"></div>
         <input type="text" id="answer" placeholder="Type reading" lang="ja" />
-        <div style="display: flex; gap: 10px;">
-          <button id="submit-btn" onclick="submitAnswer()" style="flex: 1;">Submit</button>
-          <button id="skip-btn" class="secondary" onclick="skipRound()" style="width: auto; padding: 12px 20px;">Skip</button>
+        <div style="display: flex; gap: 10px">
+          <button id="submit-btn" onclick="submitAnswer()" style="flex: 1">
+            Submit
+          </button>
+          <button
+            id="skip-btn"
+            class="secondary"
+            onclick="skipRound()"
+            style="width: auto; padding: 12px 20px"
+          >
+            Skip
+          </button>
         </div>
       </div>
 
@@ -375,7 +390,9 @@
         <div class="game-over" id="game-over-content">
           <h2 id="game-over-text"></h2>
           <div class="scores" id="final-scores"></div>
-          <button onclick="location.reload()">Play Again</button>
+          <button id="rematch-btn" onclick="requestRematch()">
+            Play Again
+          </button>
         </div>
       </div>
 
@@ -384,9 +401,10 @@
 
     <script>
       // Use relative WebSocket URL in production, direct URL for local file:// dev
-      const WS_URL = window.location.protocol === 'file:'
-        ? 'ws://localhost:3000/ws/ephemeral'
-        : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/ephemeral`;
+      const WS_URL =
+        window.location.protocol === "file:"
+          ? "ws://localhost:3000/ws/ephemeral"
+          : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws/ephemeral`;
       const ROUND_TIMEOUT = 15;
       let ws = null;
       let playerName = "";
@@ -437,7 +455,10 @@
         oscillator.type = type;
 
         gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        gainNode.gain.exponentialRampToValueAtTime(
+          0.01,
+          audioCtx.currentTime + duration,
+        );
 
         oscillator.start(audioCtx.currentTime);
         oscillator.stop(audioCtx.currentTime + duration);
@@ -549,6 +570,9 @@
             lastRoundResult = null;
             currentKanji = "";
             updateScores();
+            // Reset rematch button in case this is a rematch
+            document.getElementById("rematch-btn").textContent = "Play Again";
+            document.getElementById("rematch-btn").disabled = false;
             break;
 
           case "round_start":
@@ -564,13 +588,18 @@
             // Show previous round result (or placeholder on first round)
             const prevWordEl = document.getElementById("previous-word");
             if (lastRoundResult) {
-              document.getElementById("prev-kanji").textContent = lastRoundResult.kanji;
-              document.getElementById("prev-reading").textContent = lastRoundResult.reading;
-              document.getElementById("prev-result").textContent = lastRoundResult.resultText;
-              prevWordEl.className = "previous-word " + lastRoundResult.resultClass;
+              document.getElementById("prev-kanji").textContent =
+                lastRoundResult.kanji;
+              document.getElementById("prev-reading").textContent =
+                lastRoundResult.reading;
+              document.getElementById("prev-result").textContent =
+                lastRoundResult.resultText;
+              prevWordEl.className =
+                "previous-word " + lastRoundResult.resultClass;
             } else {
               document.getElementById("prev-kanji").textContent = "";
-              document.getElementById("prev-reading").textContent = "First to 15 wins!";
+              document.getElementById("prev-reading").textContent =
+                "First to 15 wins!";
               document.getElementById("prev-result").textContent = "";
               prevWordEl.className = "previous-word";
             }
@@ -596,7 +625,9 @@
             const isWinner = msg.winner === playerName;
             let prevResultText, prevResultClass;
             if (msg.winner) {
-              prevResultText = isWinner ? "✓ You got it!" : `✗ ${opponentName} got it`;
+              prevResultText = isWinner
+                ? "✓ You got it!"
+                : `✗ ${opponentName} got it`;
               prevResultClass = isWinner ? "win" : "lose";
             } else {
               prevResultText = "— Skipped";
@@ -606,7 +637,7 @@
               kanji: currentKanji,
               reading: msg.correct_reading,
               resultText: prevResultText,
-              resultClass: prevResultClass
+              resultClass: prevResultClass,
             };
 
             // Disable inputs while waiting for next round
@@ -624,6 +655,10 @@
           case "skip_waiting":
             document.getElementById("skip-btn").textContent = "Waiting...";
             document.getElementById("skip-btn").disabled = true;
+            break;
+
+          case "rematch_waiting":
+            // Already handled in requestRematch() - button shows "Waiting..."
             break;
 
           case "game_end":
@@ -673,8 +708,10 @@
       function isInGame() {
         const gameScreen = document.getElementById("game-screen");
         const resultScreen = document.getElementById("result-screen");
-        return !gameScreen.classList.contains("hidden") ||
-               !resultScreen.classList.contains("hidden");
+        return (
+          !gameScreen.classList.contains("hidden") ||
+          !resultScreen.classList.contains("hidden")
+        );
       }
 
       function goToLanding() {
@@ -783,6 +820,12 @@
         document.getElementById("skip-btn").disabled = true;
       }
 
+      function requestRematch() {
+        ws.send(JSON.stringify({ type: "request_rematch" }));
+        document.getElementById("rematch-btn").textContent = "Waiting...";
+        document.getElementById("rematch-btn").disabled = true;
+      }
+
       // Event listeners
       document
         .getElementById("player-name")
@@ -827,7 +870,10 @@
       const myCreatedGame = sessionStorage.getItem("createdGameId");
       if (urlGameCode) {
         // If this is our own game, go to landing instead of showing join flow
-        if (myCreatedGame && myCreatedGame.toLowerCase() === urlGameCode.toLowerCase()) {
+        if (
+          myCreatedGame &&
+          myCreatedGame.toLowerCase() === urlGameCode.toLowerCase()
+        ) {
           sessionStorage.removeItem("createdGameId");
           showCreateFlow();
         } else {
