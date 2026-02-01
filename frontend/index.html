@@ -247,7 +247,7 @@
   </head>
   <body>
     <div class="card">
-      <img src="logo.svg" alt="" class="logo" aria-hidden="true" />
+      <img src="logo.svg" alt="" class="logo" aria-hidden="true" onclick="goToLanding()" style="cursor: pointer;" />
       <h1 class="sr-only">読み対戦 (Yomitaisen)</h1>
 
       <!-- Landing Screen -->
@@ -554,6 +554,22 @@
         document.getElementById("create-btn").disabled = false;
         document.getElementById("join-btn").disabled = false;
         document.getElementById("join-invite-btn").disabled = false;
+      }
+
+      function isInGame() {
+        const gameScreen = document.getElementById("game-screen");
+        const resultScreen = document.getElementById("result-screen");
+        return !gameScreen.classList.contains("hidden") ||
+               !resultScreen.classList.contains("hidden");
+      }
+
+      function goToLanding() {
+        if (isInGame()) {
+          if (!confirm("Leave the current game?")) {
+            return;
+          }
+        }
+        window.location.href = window.location.pathname;
       }
 
       async function createGame() {
