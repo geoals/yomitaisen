@@ -377,7 +377,6 @@ async fn handle_round_timeout(state: Arc<DuelState>, game_id: String, round_numb
 
         info!(game_id, round_number, "Round timed out");
 
-        let scores = game.session.scores();
         let game_winner = game.session.game_winner().map(|s| s.to_string());
 
         game.broadcast(ServerMessage::RoundResult {
@@ -385,13 +384,14 @@ async fn handle_round_timeout(state: Arc<DuelState>, game_id: String, round_numb
             correct_reading: outcome.correct_reading,
         });
 
-        Some((scores.0 + scores.1, game_winner))
+        Some(game_winner)
     };
 
-    let Some((round_number, game_winner)) = timeout_result else {
+    let Some(game_winner) = timeout_result else {
         return;
     };
 
+    // Use the round_number parameter (the round that timed out), not scores
     continue_or_end_game(&state, &game_id, game_winner, round_number).await;
 }
 
