@@ -23,6 +23,12 @@ Follow the red-green-refactor cycle strictly:
 
 Never write implementation code without a corresponding test. Tests are the specification.
 
+**Bugfixes follow TDD too:**
+1. Write a failing test that reproduces the bug
+2. Verify it fails for the expected reason
+3. Fix the bug
+4. Verify the test passes
+
 ### 3. Propose Before Implementing
 
 For any non-trivial work:
