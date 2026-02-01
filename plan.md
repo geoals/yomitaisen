@@ -144,6 +144,8 @@ Tiers:
 
 ## Architecture Decisions
 
+**Vanilla JS frontend for MVP, rebuild later.** The current frontend is a temporary MVP using plain HTML/JS. Once the backend stabilizes, rebuild in Svelte, React, or another framework. This avoids premature optimization on UI architecture while core game mechanics are still evolving.
+
 **Monolith first, split later.** No separate matchmaking service until pain points emerge:
 
 - Avoids distributed transaction complexity
