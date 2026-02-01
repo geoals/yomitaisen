@@ -94,22 +94,8 @@ impl EphemeralState {
     pub fn handle_disconnect(&self, user_id: &str) {
         info!(user_id, "Player disconnected");
 
-        // If in a game, notify opponent and clean up
-        let Some((_, game_id)) = self.registry.player_games.remove(user_id) else {
-            return;
-        };
-
-        // Get opponent and broadcast before removing game
-        let Some((_, game)) = self.registry.games.remove(&game_id) else {
-            return;
-        };
-
-        let Some(opponent_id) = game.session.opponent_of(user_id) else {
-            return;
-        };
-
-        // Notify opponent and clean up their mapping
-        self.registry.player_games.remove(opponent_id);
-        game.broadcast(ServerMessage::OpponentDisconnected);
+        if let Some(info) = self.registry.remove_player_from_game(user_id) {
+            info.game.broadcast(ServerMessage::OpponentDisconnected);
+        }
     }
 }

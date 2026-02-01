@@ -91,29 +91,11 @@ impl MatchmakingState {
         // Remove player channel
         self.player_channels.remove(user_id);
 
-        // If in a game, notify opponent and clean up
-        let Some((_, game_id)) = self.registry.player_games.remove(user_id) else {
-            return;
-        };
-
-        // Get opponent before removing game
-        let opponent_id = {
-            let Some(game) = self.registry.games.get(&game_id) else {
-                return;
-            };
-            game.session.opponent_of(user_id).map(|s| s.to_string())
-        };
-
-        // Remove game
-        self.registry.games.remove(&game_id);
-
-        // Notify opponent and clean up their mapping
-        if let Some(opponent_id) = opponent_id {
-            self.registry.player_games.remove(&opponent_id);
-
-            if let Some(opponent_tx) = self.player_channels.get(&opponent_id) {
-                let _ = opponent_tx.send(ServerMessage::OpponentDisconnected);
-            }
+        // If in a game, clean up and notify opponent
+        if let Some(info) = self.registry.remove_player_from_game(user_id)
+            && let Some(opponent_tx) = self.player_channels.get(&info.opponent_id)
+        {
+            let _ = opponent_tx.send(ServerMessage::OpponentDisconnected);
         }
     }
 }

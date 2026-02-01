@@ -9,6 +9,12 @@ use std::time::Duration;
 use tokio::sync::broadcast;
 use tracing::{debug, info};
 
+/// Info returned when a player is removed from a game due to disconnect
+pub struct DisconnectInfo {
+    pub game: ActiveGame,
+    pub opponent_id: String,
+}
+
 /// Shared game state management used by both ephemeral and matchmaking modes.
 /// Handles active games, player-to-game mapping, answer submission, and cleanup.
 pub struct GameRegistry {
@@ -46,6 +52,16 @@ impl GameRegistry {
             self.player_games.remove(&game.session.player1);
             self.player_games.remove(&game.session.player2);
         }
+    }
+
+    /// Remove a player from their game due to disconnect.
+    /// Returns the game and opponent info so the caller can send notifications.
+    pub fn remove_player_from_game(&self, user_id: &str) -> Option<DisconnectInfo> {
+        let (_, game_id) = self.player_games.remove(user_id)?;
+        let (_, game) = self.games.remove(&game_id)?;
+        let opponent_id = game.session.opponent_of(user_id)?.to_string();
+        self.player_games.remove(&opponent_id);
+        Some(DisconnectInfo { game, opponent_id })
     }
 
     /// Submit an answer and return the result if correct
