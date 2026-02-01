@@ -336,7 +336,10 @@
     </div>
 
     <script>
-      const WS_URL = "ws://localhost:3000/ws/ephemeral";
+      // Use relative WebSocket URL in production, direct URL for local file:// dev
+      const WS_URL = window.location.protocol === 'file:'
+        ? 'ws://localhost:3000/ws/ephemeral'
+        : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/ephemeral`;
       const ROUND_TIMEOUT = 15;
       let ws = null;
       let playerName = "";
