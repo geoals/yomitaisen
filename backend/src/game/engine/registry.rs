@@ -149,6 +149,68 @@ impl GameRegistry {
         .await;
     }
 
+    /// Handle a player skipping the current round (they don't know the answer).
+    /// Both players must skip for the round to end.
+    pub async fn handle_skip(
+        self: &Arc<Self>,
+        user_id: &str,
+        tx: &broadcast::Sender<ServerMessage>,
+    ) {
+        use crate::game::core::session::SkipResult;
+
+        let game_id = match self.player_games.get(user_id) {
+            Some(id) => id.clone(),
+            None => return,
+        };
+
+        let skip_result = {
+            let Some(mut game) = self.games.get_mut(&game_id) else {
+                return;
+            };
+
+            let Some(result) = game.session.record_skip(user_id) else {
+                return;
+            };
+
+            match result {
+                SkipResult::AlreadySkipped => {
+                    debug!(user_id, "Player already skipped");
+                    return;
+                }
+                SkipResult::WaitingForOpponent => {
+                    info!(user_id, "Player skipped, waiting for opponent");
+                    let _ = tx.send(ServerMessage::SkipWaiting);
+                    return;
+                }
+                SkipResult::BothSkipped(outcome) => {
+                    info!(user_id, "Both players skipped, ending round");
+                    let game_winner = game.session.game_winner().map(|s| s.to_string());
+                    let round_number = game.session.scores().0 + game.session.scores().1;
+
+                    game.broadcast(ServerMessage::RoundResult {
+                        winner: outcome.winner,
+                        correct_reading: outcome.correct_reading,
+                    });
+
+                    (game_winner, round_number)
+                }
+            }
+        };
+
+        let registry = self.clone();
+        continue_or_end_game(
+            &self.games,
+            &self.words,
+            self.round_timeout,
+            &game_id,
+            skip_result.0,
+            skip_result.1,
+            &self.player_games,
+            Arc::new(move |id: &str| registry.cleanup_game(id)),
+        )
+        .await;
+    }
+
     /// Start round 1 for a newly created game
     pub async fn start_first_round(
         self: &Arc<Self>,

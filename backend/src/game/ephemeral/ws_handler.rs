@@ -56,6 +56,13 @@ impl ConnectionHandler for EphemeralState {
                 };
                 self.registry.handle_answer(user_id, &answer, &tx).await;
             }
+            ClientMessage::Skip => {
+                let Some(user_id) = &ctx.user_id else {
+                    warn!("Received skip from unknown user");
+                    return;
+                };
+                self.registry.handle_skip(user_id, &tx).await;
+            }
             ClientMessage::Join { .. } => {
                 warn!("Received Join message on ephemeral endpoint");
                 let _ = tx.send(ServerMessage::Error {

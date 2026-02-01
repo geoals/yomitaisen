@@ -26,6 +26,13 @@ impl ConnectionHandler for MatchmakingState {
                 };
                 self.registry.handle_answer(user_id, &answer, &tx).await;
             }
+            ClientMessage::Skip => {
+                let Some(user_id) = &ctx.user_id else {
+                    warn!("Received skip from unknown user");
+                    return;
+                };
+                self.registry.handle_skip(user_id, &tx).await;
+            }
             ClientMessage::CreateGame { .. } | ClientMessage::JoinGame { .. } => {
                 warn!("Received ephemeral game message on matchmaking endpoint");
                 let _ = tx.send(ServerMessage::Error {

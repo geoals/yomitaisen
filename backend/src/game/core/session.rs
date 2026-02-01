@@ -4,6 +4,8 @@ use crate::game::core::Word;
 pub struct Round {
     pub number: u32,
     pub word: Word,
+    pub player1_skipped: bool,
+    pub player2_skipped: bool,
 }
 
 impl Round {
@@ -17,6 +19,17 @@ impl Round {
 pub struct RoundOutcome {
     pub winner: Option<String>,
     pub correct_reading: String,
+}
+
+/// Result of a player attempting to skip
+#[derive(Debug, PartialEq)]
+pub enum SkipResult {
+    /// Player already skipped this round
+    AlreadySkipped,
+    /// Waiting for opponent to also skip
+    WaitingForOpponent,
+    /// Both players skipped - round ends
+    BothSkipped(RoundOutcome),
 }
 
 const WINS_NEEDED: u32 = 15;
@@ -78,6 +91,8 @@ impl GameSession {
         self.current_round = Some(Round {
             number: round_number,
             word,
+            player1_skipped: false,
+            player2_skipped: false,
         });
     }
 
@@ -107,6 +122,39 @@ impl GameSession {
             winner: None,
             correct_reading: round.word.reading,
         })
+    }
+
+    /// Record a player skipping the round. Returns the result of the skip attempt.
+    pub fn record_skip(&mut self, player_id: &str) -> Option<SkipResult> {
+        let round = self.current_round.as_mut()?;
+
+        // Mark this player as skipped
+        let (already_skipped, opponent_skipped) = if player_id == self.player1 {
+            let already = round.player1_skipped;
+            round.player1_skipped = true;
+            (already, round.player2_skipped)
+        } else if player_id == self.player2 {
+            let already = round.player2_skipped;
+            round.player2_skipped = true;
+            (already, round.player1_skipped)
+        } else {
+            return None;
+        };
+
+        if already_skipped {
+            return Some(SkipResult::AlreadySkipped);
+        }
+
+        if opponent_skipped {
+            // Both players have now skipped - end the round
+            let round = self.current_round.take()?;
+            Some(SkipResult::BothSkipped(RoundOutcome {
+                winner: None,
+                correct_reading: round.word.reading,
+            }))
+        } else {
+            Some(SkipResult::WaitingForOpponent)
+        }
     }
 
     /// Get the current round number, if any
@@ -201,6 +249,34 @@ mod tests {
 
         let result = session.timeout_round();
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_skip_requires_both_players() {
+        let mut session = GameSession::new("alice".to_string(), "bob".to_string());
+        let word = Word {
+            kanji: "日本".to_string(),
+            reading: "にほん".to_string(),
+        };
+
+        session.start_round(1, word);
+
+        // First player skips - should wait for opponent
+        let result = session.record_skip("alice");
+        assert_eq!(result, Some(SkipResult::WaitingForOpponent));
+
+        // Same player skips again - already skipped
+        let result = session.record_skip("alice");
+        assert_eq!(result, Some(SkipResult::AlreadySkipped));
+
+        // Second player skips - round ends
+        let result = session.record_skip("bob");
+        assert!(matches!(result, Some(SkipResult::BothSkipped(_))));
+
+        if let Some(SkipResult::BothSkipped(outcome)) = result {
+            assert_eq!(outcome.winner, None);
+            assert_eq!(outcome.correct_reading, "にほん");
+        }
     }
 
     #[test]

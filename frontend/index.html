@@ -312,7 +312,10 @@
         </div>
         <div class="kanji" id="kanji"></div>
         <input type="text" id="answer" placeholder="Type reading" />
-        <button id="submit-btn" onclick="submitAnswer()">Submit</button>
+        <div style="display: flex; gap: 10px;">
+          <button id="submit-btn" onclick="submitAnswer()" style="flex: 1;">Submit</button>
+          <button id="skip-btn" class="secondary" onclick="skipRound()" style="width: auto; padding: 12px 20px;">Skip</button>
+        </div>
       </div>
 
       <!-- Result Screen (brief, between rounds) -->
@@ -468,6 +471,8 @@
             document.getElementById("kanji").textContent = msg.kanji;
             document.getElementById("answer").value = "";
             document.getElementById("submit-btn").disabled = false;
+            document.getElementById("skip-btn").disabled = false;
+            document.getElementById("skip-btn").textContent = "Skip";
             updateScores();
             showScreen("game-screen");
             document.getElementById("answer").focus();
@@ -498,8 +503,14 @@
 
           case "wrong_answer":
             document.getElementById("submit-btn").disabled = false;
+            document.getElementById("skip-btn").disabled = false;
             document.getElementById("answer").value = "";
             document.getElementById("answer").focus();
+            break;
+
+          case "skip_waiting":
+            document.getElementById("skip-btn").textContent = "Waiting...";
+            document.getElementById("skip-btn").disabled = true;
             break;
 
           case "game_end":
@@ -633,6 +644,12 @@
           }),
         );
         document.getElementById("submit-btn").disabled = true;
+      }
+
+      function skipRound() {
+        ws.send(JSON.stringify({ type: "skip" }));
+        document.getElementById("submit-btn").disabled = true;
+        document.getElementById("skip-btn").disabled = true;
       }
 
       // Event listeners

@@ -12,6 +12,7 @@ pub enum ClientMessage {
 
     // Shared
     Answer { answer: String },
+    Skip,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -32,6 +33,7 @@ pub enum ServerMessage {
     RoundStart { kanji: String, round: u32 },
     RoundResult { winner: Option<String>, correct_reading: String },
     WrongAnswer,
+    SkipWaiting,
     OpponentDisconnected,
     GameEnd { winner: Option<String> },
     #[allow(dead_code)]
