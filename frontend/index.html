@@ -478,6 +478,7 @@
         switch (msg.type) {
           case "game_created":
             gameId = msg.game_id;
+            sessionStorage.setItem("createdGameId", gameId);
             document.getElementById("lobby-game-code").textContent =
               gameId.toUpperCase();
             // Update URL without reload
@@ -619,6 +620,7 @@
       }
 
       function backToLanding() {
+        sessionStorage.removeItem("createdGameId");
         showCreateFlow();
         showScreen("landing-screen");
         document.getElementById("create-btn").disabled = false;
@@ -639,6 +641,7 @@
             return;
           }
         }
+        sessionStorage.removeItem("createdGameId");
         window.location.href = window.location.pathname;
       }
 
@@ -779,8 +782,15 @@
 
       // Initialize
       const urlGameCode = getGameCodeFromURL();
+      const myCreatedGame = sessionStorage.getItem("createdGameId");
       if (urlGameCode) {
-        showJoinFlow(urlGameCode);
+        // If this is our own game, go to landing instead of showing join flow
+        if (myCreatedGame && myCreatedGame.toLowerCase() === urlGameCode.toLowerCase()) {
+          sessionStorage.removeItem("createdGameId");
+          showCreateFlow();
+        } else {
+          showJoinFlow(urlGameCode);
+        }
       }
 
       // Bind wanakana to answer input for real-time romaji→hiragana conversion
