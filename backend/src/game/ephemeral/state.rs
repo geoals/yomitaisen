@@ -2,8 +2,9 @@ use super::game_id::generate_unique_game_id;
 use super::pending_game::PendingGame;
 use super::player::EphemeralPlayer;
 use crate::game::core::WordRepository;
-use crate::game::duel::active_game::{ActiveGame, DEFAULT_ROUND_TIMEOUT};
+use crate::game::duel::active_game::ActiveGame;
 use crate::game::duel::messages::ServerMessage;
+use crate::game::duel::registry::GameRegistry;
 use crate::game::duel::session::GameSession;
 use dashmap::DashMap;
 use std::sync::Arc;
@@ -20,26 +21,22 @@ pub struct JoinedGame {
 }
 
 pub struct EphemeralState {
-    pub words: WordRepository,
-    pub games: Arc<DashMap<String, ActiveGame>>,
-    pub player_games: Arc<DashMap<String, String>>, // display_name -> game_id
-    pub pending_games: DashMap<String, PendingGame>, // game_id -> pending game
-    pub round_timeout: Duration,
+    pub registry: Arc<GameRegistry>,
+    pub pending_games: DashMap<String, PendingGame>,
 }
 
 impl EphemeralState {
     pub fn new(words: WordRepository) -> Self {
         Self {
-            words,
-            games: Arc::new(DashMap::new()),
-            player_games: Arc::new(DashMap::new()),
+            registry: Arc::new(GameRegistry::new(words)),
             pending_games: DashMap::new(),
-            round_timeout: DEFAULT_ROUND_TIMEOUT,
         }
     }
 
     pub fn with_round_timeout(mut self, timeout: Duration) -> Self {
-        self.round_timeout = timeout;
+        self.registry = Arc::new(
+            GameRegistry::new(self.registry.words.clone()).with_round_timeout(timeout),
+        );
         self
     }
 
@@ -78,10 +75,12 @@ impl EphemeralState {
         let session = GameSession::new(host_name.clone(), guest_name.clone());
         let game = ActiveGame::new(session, pending.host_tx.clone(), tx);
 
-        self.games.insert(game_id.to_string(), game);
-        self.player_games
+        self.registry.games.insert(game_id.to_string(), game);
+        self.registry
+            .player_games
             .insert(host_name.clone(), game_id.to_string());
-        self.player_games
+        self.registry
+            .player_games
             .insert(guest_name.clone(), game_id.to_string());
 
         info!(
@@ -99,51 +98,33 @@ impl EphemeralState {
         })
     }
 
-    pub fn broadcast_to_game(&self, user_id: &str, msg: ServerMessage) {
-        let Some(game_id) = self.player_games.get(user_id) else {
-            return;
-        };
-        let Some(game) = self.games.get(&*game_id) else {
-            return;
-        };
-        game.broadcast(msg);
-    }
-
     pub fn handle_disconnect(&self, user_id: &str) {
         info!(user_id, "Player disconnected");
 
         // If in a game, notify opponent and clean up
-        let Some((_, game_id)) = self.player_games.remove(user_id) else {
+        let Some((_, game_id)) = self.registry.player_games.remove(user_id) else {
             return;
         };
 
         // Get opponent before removing game
         let opponent_id = {
-            let Some(game) = self.games.get(&game_id) else {
+            let Some(game) = self.registry.games.get(&game_id) else {
                 return;
             };
             game.session.opponent_of(user_id).map(|s| s.to_string())
         };
 
         // Remove game
-        self.games.remove(&game_id);
+        self.registry.games.remove(&game_id);
 
         // Notify opponent and clean up their mapping
         if let Some(opponent_id) = opponent_id {
-            self.player_games.remove(&opponent_id);
+            self.registry.player_games.remove(&opponent_id);
 
             // Send disconnect message through the game's channel
-            if let Some(game) = self.games.get(&game_id) {
+            if let Some(game) = self.registry.games.get(&game_id) {
                 game.broadcast(ServerMessage::OpponentDisconnected);
             }
-        }
-    }
-
-    /// Clean up game state after game ends
-    pub fn cleanup_game(&self, game_id: &str) {
-        if let Some((_, game)) = self.games.remove(game_id) {
-            self.player_games.remove(&game.session.player1);
-            self.player_games.remove(&game.session.player2);
         }
     }
 }
