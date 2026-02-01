@@ -23,6 +23,7 @@ pub enum ServerMessage {
         correct_reading: String,
     },
     WrongAnswer,
+    OpponentDisconnected,
     GameEnd {
         winner: String,
     },

@@ -286,6 +286,11 @@
                     document.getElementById('final-scores').textContent = `${myScore} - ${theirScore}`;
                     showScreen('game-over-screen');
                     break;
+
+                case 'opponent_disconnected':
+                    alert('Opponent disconnected');
+                    location.reload();
+                    break;
             }
         }
 

@@ -139,3 +139,29 @@ async fn correct_answer_wins_round() {
         ServerMessage::RoundResult { winner: Some(ref w), .. } if w == "user-1"
     ));
 }
+
+#[tokio::test]
+async fn opponent_disconnect_notifies_remaining_player() {
+    let url = spawn_test_server().await;
+
+    let (mut ws1, _) = connect_async(&url).await.unwrap();
+    let (mut ws2, _) = connect_async(&url).await.unwrap();
+
+    ws1.send(join_msg("user-1")).await.unwrap();
+    ws2.send(join_msg("user-2")).await.unwrap();
+
+    // Skip to game started
+    assert!(matches!(recv(&mut ws1).await, ServerMessage::Waiting));
+    assert!(matches!(recv(&mut ws1).await, ServerMessage::GameStart { .. }));
+    assert!(matches!(recv(&mut ws1).await, ServerMessage::RoundStart { .. }));
+
+    assert!(matches!(recv(&mut ws2).await, ServerMessage::GameStart { .. }));
+    assert!(matches!(recv(&mut ws2).await, ServerMessage::RoundStart { .. }));
+
+    // Player 2 disconnects
+    ws2.close(None).await.unwrap();
+
+    // Player 1 should receive OpponentDisconnected
+    let msg = recv(&mut ws1).await;
+    assert!(matches!(msg, ServerMessage::OpponentDisconnected));
+}

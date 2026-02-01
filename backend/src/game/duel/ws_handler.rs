@@ -150,6 +150,41 @@ impl DuelState {
         debug!(?game_id, "Broadcasting to game");
         game.broadcast(msg);
     }
+
+    fn handle_disconnect(&self, user_id: &str) {
+        info!(user_id, "Player disconnected");
+
+        // Remove from lobby if waiting
+        self.lobby.remove_waiting(user_id);
+
+        // Remove player channel
+        self.player_channels.remove(user_id);
+
+        // If in a game, notify opponent and clean up
+        let Some((_, game_id)) = self.player_games.remove(user_id) else {
+            return;
+        };
+
+        // Get opponent before removing game
+        let opponent_id = {
+            let Some(game) = self.games.get(&game_id) else {
+                return;
+            };
+            game.session.opponent_of(user_id).map(|s| s.to_string())
+        };
+
+        // Remove game
+        self.games.remove(&game_id);
+
+        // Notify opponent and clean up their mapping
+        if let Some(opponent_id) = opponent_id {
+            self.player_games.remove(&opponent_id);
+
+            if let Some(opponent_tx) = self.player_channels.get(&opponent_id) {
+                let _ = opponent_tx.send(ServerMessage::OpponentDisconnected);
+            }
+        }
+    }
 }
 
 pub async fn handle_connection(socket: WebSocket, state: Arc<DuelState>) {
@@ -167,11 +202,16 @@ pub async fn handle_connection(socket: WebSocket, state: Arc<DuelState>) {
         }
     });
 
-    let recv_task = tokio::spawn(handle_incoming(receiver, tx, state));
+    let state_clone = state.clone();
+    let recv_task = tokio::spawn(handle_incoming(receiver, tx, state_clone));
 
     tokio::select! {
         _ = send_task => {},
-        _ = recv_task => {},
+        result = recv_task => {
+            if let Ok(Some(user_id)) = result {
+                state.handle_disconnect(&user_id);
+            }
+        },
     }
 
     info!("WebSocket connection closed");
@@ -185,7 +225,7 @@ async fn handle_incoming(
     mut receiver: futures_util::stream::SplitStream<WebSocket>,
     tx: broadcast::Sender<ServerMessage>,
     state: Arc<DuelState>,
-) {
+) -> Option<String> {
     let mut ctx = ConnectionContext { user_id: None };
 
     while let Some(Ok(msg)) = receiver.next().await {
@@ -203,6 +243,8 @@ async fn handle_incoming(
 
         handle_message(client_msg, &tx, &state, &mut ctx).await;
     }
+
+    ctx.user_id
 }
 
 async fn handle_message(
