@@ -41,6 +41,13 @@ enum JoinResult {
     },
 }
 
+/// Result of a correct answer submission
+struct AnswerResult {
+    round_result: ServerMessage,
+    game_winner: Option<String>,
+    round_number: u32,
+}
+
 impl DuelState {
     pub fn new(words: WordRepository) -> Self {
         Self {
@@ -102,12 +109,8 @@ impl DuelState {
         }
     }
 
-    /// Returns (RoundResult, game_winner, current_round_number) if answer is correct
-    fn submit_answer(
-        &self,
-        user_id: &str,
-        answer: &str,
-    ) -> Option<(ServerMessage, Option<String>, u32)> {
+    /// Returns result if answer is correct, None if wrong
+    fn submit_answer(&self, user_id: &str, answer: &str) -> Option<AnswerResult> {
         let game_id = self.player_games.get(user_id)?;
         let mut game = self.games.get_mut(&*game_id)?;
 
@@ -127,14 +130,14 @@ impl DuelState {
 
         let round_number = scores.0 + scores.1;
 
-        Some((
-            ServerMessage::RoundResult {
+        Some(AnswerResult {
+            round_result: ServerMessage::RoundResult {
                 winner: outcome.winner,
                 correct_reading: outcome.correct_reading,
             },
             game_winner,
             round_number,
-        ))
+        })
     }
 
     fn broadcast_to_game(&self, user_id: &str, msg: ServerMessage) {
@@ -278,17 +281,16 @@ async fn handle_answer(
     state: &Arc<DuelState>,
     tx: &broadcast::Sender<ServerMessage>,
 ) {
-    let Some((round_result, game_winner, round_number)) = state.submit_answer(user_id, answer)
-    else {
+    let Some(result) = state.submit_answer(user_id, answer) else {
         debug!(user_id, answer, "Wrong answer");
         let _ = tx.send(ServerMessage::WrongAnswer);
         return;
     };
 
     // Broadcast round result to both players
-    state.broadcast_to_game(user_id, round_result);
+    state.broadcast_to_game(user_id, result.round_result);
 
-    match game_winner {
+    match result.game_winner {
         Some(winner) => {
             info!(winner, "Game ended");
             state.broadcast_to_game(user_id, ServerMessage::GameEnd { winner });
@@ -296,7 +298,7 @@ async fn handle_answer(
         None => {
             // Start next round
             if let Some(word) = state.words.get_random().await {
-                let next_round = round_number + 1;
+                let next_round = result.round_number + 1;
                 info!(
                     round = next_round,
                     kanji = word.kanji,
