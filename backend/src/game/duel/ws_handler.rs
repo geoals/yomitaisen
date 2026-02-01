@@ -206,7 +206,7 @@ async fn handle_message(
                 return;
             };
             debug!(user_id, answer, "Player answered");
-            handle_answer(user_id, &answer, state);
+            handle_answer(user_id, &answer, state, tx);
         }
     }
 }
@@ -258,9 +258,10 @@ async fn handle_join(
     }
 }
 
-fn handle_answer(user_id: &str, answer: &str, state: &Arc<DuelState>) {
+fn handle_answer(user_id: &str, answer: &str, state: &Arc<DuelState>, tx: &broadcast::Sender<ServerMessage>) {
     let Some(result) = state.submit_answer(user_id, answer) else {
-        debug!(user_id, answer, "Wrong answer or no active game");
+        debug!(user_id, answer, "Wrong answer");
+        let _ = tx.send(ServerMessage::WrongAnswer);
         return;
     };
     state.broadcast_to_game(user_id, result);

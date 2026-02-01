@@ -22,6 +22,7 @@ pub enum ServerMessage {
         winner: Option<String>,
         correct_reading: String,
     },
+    WrongAnswer,
     #[allow(dead_code)]
     GameEnd {
         winner: String,

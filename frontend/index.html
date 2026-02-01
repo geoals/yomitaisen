@@ -218,6 +218,12 @@
                     document.getElementById('correct-reading').textContent = msg.correct_reading;
                     showScreen('result-screen');
                     break;
+
+                case 'wrong_answer':
+                    document.getElementById('submit-btn').disabled = false;
+                    document.getElementById('answer').value = '';
+                    document.getElementById('answer').focus();
+                    break;
             }
         }
 
