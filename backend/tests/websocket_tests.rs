@@ -1,21 +1,7 @@
 use futures_util::{SinkExt, StreamExt};
-use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungstenite::Message};
-
-#[derive(Debug, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-enum ClientMessage {
-    Join { user_id: String },
-}
-
-#[derive(Debug, Deserialize, PartialEq)]
-#[serde(tag = "type", rename_all = "snake_case")]
-enum ServerMessage {
-    Waiting,
-    GameStart { opponent: String },
-    RoundStart { kanji: String, round: u32 },
-}
+use yomitaisen::messages::{ClientMessage, ServerMessage};
 
 type WsStream = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 
@@ -37,6 +23,14 @@ async fn spawn_test_server() -> String {
 fn join_msg(user_id: &str) -> Message {
     let json = serde_json::to_string(&ClientMessage::Join {
         user_id: user_id.to_string(),
+    })
+    .unwrap();
+    Message::Text(json.into())
+}
+
+fn answer_msg(answer: &str) -> Message {
+    let json = serde_json::to_string(&ClientMessage::Answer {
+        answer: answer.to_string(),
     })
     .unwrap();
     Message::Text(json.into())
@@ -92,4 +86,56 @@ async fn game_start_is_followed_by_round_start() {
     // Player 2: GameStart, then RoundStart
     assert!(matches!(recv(&mut ws2).await, ServerMessage::GameStart { .. }));
     assert!(matches!(recv(&mut ws2).await, ServerMessage::RoundStart { round: 1, .. }));
+}
+
+#[tokio::test]
+async fn correct_answer_wins_round() {
+    let url = spawn_test_server().await;
+
+    let (mut ws1, _) = connect_async(&url).await.unwrap();
+    let (mut ws2, _) = connect_async(&url).await.unwrap();
+
+    ws1.send(join_msg("user-1")).await.unwrap();
+    ws2.send(join_msg("user-2")).await.unwrap();
+
+    // Skip to RoundStart
+    assert!(matches!(recv(&mut ws1).await, ServerMessage::Waiting));
+    assert!(matches!(recv(&mut ws1).await, ServerMessage::GameStart { .. }));
+    let ServerMessage::RoundStart { kanji, .. } = recv(&mut ws1).await else {
+        panic!("Expected RoundStart");
+    };
+
+    assert!(matches!(recv(&mut ws2).await, ServerMessage::GameStart { .. }));
+    assert!(matches!(recv(&mut ws2).await, ServerMessage::RoundStart { .. }));
+
+    // Look up correct reading from seed data
+    let correct_reading = match kanji.as_str() {
+        "日本" => "にほん",
+        "学校" => "がっこう",
+        "電話" => "でんわ",
+        "先生" => "せんせい",
+        "時間" => "じかん",
+        "食べる" => "たべる",
+        "飲む" => "のむ",
+        "書く" => "かく",
+        "読む" => "よむ",
+        "聞く" => "きく",
+        _ => panic!("Unknown kanji: {}", kanji),
+    };
+
+    // Player 1 answers correctly
+    ws1.send(answer_msg(correct_reading)).await.unwrap();
+
+    // Both receive RoundResult
+    let result1 = recv(&mut ws1).await;
+    let result2 = recv(&mut ws2).await;
+
+    assert!(matches!(
+        result1,
+        ServerMessage::RoundResult { winner: Some(ref w), .. } if w == "user-1"
+    ));
+    assert!(matches!(
+        result2,
+        ServerMessage::RoundResult { winner: Some(ref w), .. } if w == "user-1"
+    ));
 }

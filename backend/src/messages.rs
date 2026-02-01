@@ -1,20 +1,14 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ClientMessage {
-    Join {
-        user_id: String,
-    },
-    #[allow(dead_code)]
-    Answer {
-        answer: String,
-    },
+    Join { user_id: String },
+    Answer { answer: String },
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
-#[allow(dead_code)]
 pub enum ServerMessage {
     Waiting,
     GameStart {
@@ -28,9 +22,11 @@ pub enum ServerMessage {
         winner: Option<String>,
         correct_reading: String,
     },
+    #[allow(dead_code)]
     GameEnd {
         winner: String,
     },
+    #[allow(dead_code)]
     Error {
         message: String,
     },

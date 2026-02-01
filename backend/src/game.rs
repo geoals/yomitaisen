@@ -10,15 +10,24 @@ pub struct GameState {
     words: WordRepository,
     waiting_player: std::sync::Mutex<Option<(String, broadcast::Sender<ServerMessage>)>>,
     games: DashMap<String, Game>,
+    player_games: DashMap<String, String>, // user_id -> game_id
 }
 
 #[allow(dead_code)]
 struct Game {
-    player1: String,
-    player2: String,
-    tx: broadcast::Sender<ServerMessage>,
+    player1_id: String,
+    player2_id: String,
+    player1_tx: broadcast::Sender<ServerMessage>,
+    player2_tx: broadcast::Sender<ServerMessage>,
     current_round: u32,
     current_word: Option<Word>,
+}
+
+impl Game {
+    fn broadcast(&self, msg: ServerMessage) {
+        let _ = self.player1_tx.send(msg.clone());
+        let _ = self.player2_tx.send(msg);
+    }
 }
 
 enum MatchResult {
@@ -36,10 +45,15 @@ impl GameState {
             words,
             waiting_player: std::sync::Mutex::new(None),
             games: DashMap::new(),
+            player_games: DashMap::new(),
         }
     }
 
-    fn try_match(&self, user_id: String, tx: broadcast::Sender<ServerMessage>) -> MatchResult {
+    fn try_match(
+        &self,
+        user_id: String,
+        tx: broadcast::Sender<ServerMessage>,
+    ) -> MatchResult {
         let mut waiting = self.waiting_player.lock().unwrap();
 
         let Some((opponent_id, opponent_tx)) = waiting.take() else {
@@ -49,19 +63,44 @@ impl GameState {
 
         let game_id = uuid::Uuid::new_v4().to_string();
         let game = Game {
-            player1: opponent_id.clone(),
-            player2: user_id,
-            tx: tx.clone(),
+            player1_id: opponent_id.clone(),
+            player2_id: user_id.clone(),
+            player1_tx: opponent_tx.clone(),
+            player2_tx: tx.clone(),
             current_round: 0,
             current_word: None,
         };
+
         self.games.insert(game_id.clone(), game);
+        self.player_games.insert(opponent_id.clone(), game_id.clone());
+        self.player_games.insert(user_id, game_id.clone());
 
         MatchResult::Matched {
             opponent_id,
             opponent_tx,
             game_id,
         }
+    }
+
+    fn check_answer(&self, user_id: &str, answer: &str) -> Option<ServerMessage> {
+        let game_id = self.player_games.get(user_id)?;
+        let game = self.games.get(&*game_id)?;
+
+        let word = game.current_word.as_ref()?;
+        if answer != word.reading {
+            return None; // Wrong answer, ignore
+        }
+
+        Some(ServerMessage::RoundResult {
+            winner: Some(user_id.to_string()),
+            correct_reading: word.reading.clone(),
+        })
+    }
+
+    fn broadcast_to_game(&self, user_id: &str, msg: ServerMessage) {
+        let Some(game_id) = self.player_games.get(user_id) else { return };
+        let Some(game) = self.games.get(&*game_id) else { return };
+        game.broadcast(msg);
     }
 }
 
@@ -86,11 +125,17 @@ pub async fn handle_connection(socket: WebSocket, state: Arc<GameState>) {
     }
 }
 
+struct ConnectionContext {
+    user_id: Option<String>,
+}
+
 async fn handle_incoming(
     mut receiver: futures_util::stream::SplitStream<WebSocket>,
     tx: broadcast::Sender<ServerMessage>,
     state: Arc<GameState>,
 ) {
+    let mut ctx = ConnectionContext { user_id: None };
+
     while let Some(Ok(msg)) = receiver.next().await {
         let Message::Text(text) = msg else { continue };
 
@@ -98,7 +143,7 @@ async fn handle_incoming(
             continue;
         };
 
-        handle_message(client_msg, &tx, &state).await;
+        handle_message(client_msg, &tx, &state, &mut ctx).await;
     }
 }
 
@@ -106,11 +151,16 @@ async fn handle_message(
     msg: ClientMessage,
     tx: &broadcast::Sender<ServerMessage>,
     state: &Arc<GameState>,
+    ctx: &mut ConnectionContext,
 ) {
     match msg {
-        ClientMessage::Join { user_id } => handle_join(user_id, tx, state).await,
-        ClientMessage::Answer { answer: _ } => {
-            // TODO: Handle answer
+        ClientMessage::Join { user_id } => {
+            ctx.user_id = Some(user_id.clone());
+            handle_join(user_id, tx, state).await;
+        }
+        ClientMessage::Answer { answer } => {
+            let Some(user_id) = &ctx.user_id else { return };
+            handle_answer(user_id, &answer, state);
         }
     }
 }
@@ -149,4 +199,11 @@ async fn handle_join(
             }
         }
     }
+}
+
+fn handle_answer(user_id: &str, answer: &str, state: &Arc<GameState>) {
+    let Some(result) = state.check_answer(user_id, answer) else {
+        return; // Wrong answer or no game
+    };
+    state.broadcast_to_game(user_id, result);
 }

@@ -1,5 +1,5 @@
 mod game;
-mod messages;
+pub mod messages;
 mod repository;
 
 use axum::{
