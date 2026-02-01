@@ -62,6 +62,10 @@
         width: 280px;
         height: auto;
         margin: 0 auto;
+        transition: width 0.2s ease;
+      }
+      .logo.in-game {
+        width: 180px;
       }
       .sr-only {
         position: absolute;
@@ -462,6 +466,11 @@
           document.getElementById(id).classList.add("hidden");
         });
         document.getElementById(screenId).classList.remove("hidden");
+
+        // Smaller logo when in game
+        const logo = document.querySelector(".logo");
+        const inGameScreens = ["game-screen", "result-screen"];
+        logo.classList.toggle("in-game", inGameScreens.includes(screenId));
       }
 
       function updateScores() {
