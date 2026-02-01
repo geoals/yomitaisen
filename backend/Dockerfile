@@ -1,40 +1,30 @@
-FROM rustlang/rust:nightly AS builder
-
+# Stage 1: Install cargo-chef with pinned nightly
+FROM rust:1.84-bookworm AS chef
+RUN rustup default nightly-2026-01-28
+RUN cargo install cargo-chef
+RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+# Stage 2: Generate dependency recipe
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
 
-# Copy manifests first for dependency caching
-COPY Cargo.toml Cargo.lock ./
-
-# Create dummy main.rs to build dependencies
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release
-RUN rm -rf src
-
-# Copy actual source code
-COPY src ./src
-COPY migrations ./migrations
-
-# Touch main.rs to invalidate the dummy build
-RUN touch src/main.rs
-
-# Build the actual application
+# Stage 3: Build dependencies (cached) then application
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+COPY . .
 RUN cargo build --release
 
-# Runtime stage
+# Stage 4: Runtime
 FROM debian:bookworm-slim
 
 WORKDIR /app
 
-# Install runtime dependencies
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
-# Copy the binary
 COPY --from=builder /app/target/release/yomitaisen .
-
-# Copy migrations (needed at runtime for sqlx::migrate!)
 COPY --from=builder /app/migrations ./migrations
 
 ENV PORT=3000
