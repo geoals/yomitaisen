@@ -269,6 +269,14 @@ async fn handle_message(
             ctx.user_id = Some(user_id.clone());
             handle_join(user_id, tx, state).await;
         }
+        ClientMessage::CreateGame { player_name } => {
+            info!(player_name, "Player creating game");
+            todo!("handle_create_game")
+        }
+        ClientMessage::JoinGame { game_id, player_name } => {
+            info!(player_name, game_id, "Player joining game");
+            todo!("handle_join_game")
+        }
         ClientMessage::Answer { answer } => {
             let Some(user_id) = &ctx.user_id else {
                 warn!("Received answer from unknown user");

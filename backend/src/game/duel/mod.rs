@@ -1,5 +1,7 @@
+mod game_id;
 mod matchmaking;
 pub mod messages;
+mod player;
 mod session;
 mod ws_handler;
 
