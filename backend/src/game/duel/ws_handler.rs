@@ -14,6 +14,7 @@ use tokio::sync::broadcast;
 use tracing::{debug, info, warn};
 
 const DEFAULT_ROUND_TIMEOUT: Duration = Duration::from_secs(15);
+const MAX_ROUNDS: u32 = 10;
 
 pub struct DuelState {
     words: WordRepository,
@@ -516,30 +517,44 @@ async fn continue_or_end_game(
     game_winner: Option<String>,
     round_number: u32,
 ) {
-    match game_winner {
-        Some(winner) => {
-            info!(winner, "Game ended");
-            if let Some(game) = state.games.get(game_id) {
-                game.broadcast(ServerMessage::GameEnd { winner });
-            }
+    // Check for winner or max rounds reached
+    if let Some(winner) = game_winner {
+        info!(winner, "Game ended - winner by score");
+        if let Some(game) = state.games.get(game_id) {
+            game.broadcast(ServerMessage::GameEnd { winner: Some(winner) });
         }
-        None => {
-            let Some(word) = state.words.get_random().await else {
-                return;
-            };
-
-            let next_round = round_number + 1;
-            info!(round = next_round, kanji = word.kanji, "Starting next round");
-
-            if let Some(mut game) = state.games.get_mut(game_id) {
-                game.broadcast(ServerMessage::RoundStart {
-                    kanji: word.kanji.clone(),
-                    round: next_round,
-                });
-                game.session.start_round(next_round, word);
-            }
-
-            spawn_round_timeout(state.clone(), game_id.to_string(), next_round);
-        }
+        return;
     }
+
+    if round_number >= MAX_ROUNDS {
+        info!(round_number, "Game ended - max rounds reached");
+        if let Some(game) = state.games.get(game_id) {
+            let (p1_score, p2_score) = game.session.scores();
+            let winner = match p1_score.cmp(&p2_score) {
+                std::cmp::Ordering::Greater => Some(game.session.player1.clone()),
+                std::cmp::Ordering::Less => Some(game.session.player2.clone()),
+                std::cmp::Ordering::Equal => None, // Draw
+            };
+            game.broadcast(ServerMessage::GameEnd { winner });
+        }
+        return;
+    }
+
+    // Start next round
+    let Some(word) = state.words.get_random().await else {
+        return;
+    };
+
+    let next_round = round_number + 1;
+    info!(round = next_round, kanji = word.kanji, "Starting next round");
+
+    if let Some(mut game) = state.games.get_mut(game_id) {
+        game.broadcast(ServerMessage::RoundStart {
+            kanji: word.kanji.clone(),
+            round: next_round,
+        });
+        game.session.start_round(next_round, word);
+    }
+
+    spawn_round_timeout(state.clone(), game_id.to_string(), next_round);
 }

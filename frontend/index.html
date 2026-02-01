@@ -203,6 +203,9 @@
       .game-over.lose h2 {
         color: #666;
       }
+      .game-over.draw h2 {
+        color: #888;
+      }
       .error-message {
         text-align: center;
         color: #ff6b6b;
@@ -467,14 +470,22 @@
 
           case "game_end":
             stopTimer();
-            const didWin = msg.winner === playerName;
             const gameOverContent =
               document.getElementById("game-over-content");
-            gameOverContent.className =
-              "game-over " + (didWin ? "win" : "lose");
-            document.getElementById("game-over-text").textContent = didWin
-              ? "You Win!"
-              : "You Lose!";
+            let resultText;
+            let resultClass;
+            if (!msg.winner) {
+              resultText = "Draw!";
+              resultClass = "draw";
+            } else if (msg.winner === playerName) {
+              resultText = "You Win!";
+              resultClass = "win";
+            } else {
+              resultText = "You Lose!";
+              resultClass = "lose";
+            }
+            gameOverContent.className = "game-over " + resultClass;
+            document.getElementById("game-over-text").textContent = resultText;
             document.getElementById("final-scores").textContent =
               `${myScore} - ${theirScore}`;
             showScreen("game-over-screen");

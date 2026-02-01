@@ -33,7 +33,7 @@ pub enum ServerMessage {
     RoundResult { winner: Option<String>, correct_reading: String },
     WrongAnswer,
     OpponentDisconnected,
-    GameEnd { winner: String },
+    GameEnd { winner: Option<String> },
     #[allow(dead_code)]
     Error { message: String },
 }
