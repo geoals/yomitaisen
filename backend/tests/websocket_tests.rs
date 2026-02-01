@@ -410,8 +410,8 @@ async fn rematch_starts_new_game_when_both_request() {
 
     assert!(matches!(recv(&mut guest_ws).await, ServerMessage::GameStart { .. }));
 
-    // Win 15 rounds to end the game (WINS_NEEDED=15)
-    for _ in 0..15 {
+    // Win 10 rounds to end the game (WINS_NEEDED=10)
+    for _ in 0..10 {
         let ServerMessage::RoundStart { kanji, .. } = recv(&mut host_ws).await else {
             panic!("Expected RoundStart");
         };
