@@ -56,6 +56,14 @@ struct AnswerResult {
     round_number: u32,
 }
 
+/// Result of joining an ephemeral game
+struct JoinedGame {
+    game_id: String,
+    host_name: String,
+    guest_name: String,
+    host_tx: broadcast::Sender<ServerMessage>,
+}
+
 impl DuelState {
     pub fn new(words: WordRepository) -> Self {
         Self {
@@ -86,6 +94,45 @@ impl DuelState {
         self.pending_games.insert(game_id.clone(), pending);
         info!(game_id, player_name, "Created pending game");
         game_id
+    }
+
+    /// Join an existing pending game. Returns None if game not found.
+    fn join_game(
+        &self,
+        game_id: &str,
+        player_name: String,
+        tx: broadcast::Sender<ServerMessage>,
+    ) -> Option<JoinedGame> {
+        let (_, pending) = self.pending_games.remove(game_id)?;
+        let guest = EphemeralPlayer::new(&player_name);
+
+        // Create active game using player IDs
+        let session = GameSession::new(pending.host.id.clone(), guest.id.clone());
+        let game = ActiveGame {
+            session,
+            player1_tx: pending.host_tx.clone(),
+            player2_tx: tx,
+        };
+
+        self.games.insert(game_id.to_string(), game);
+        self.player_games
+            .insert(pending.host.id.clone(), game_id.to_string());
+        self.player_games
+            .insert(guest.id.clone(), game_id.to_string());
+
+        info!(
+            game_id,
+            host = pending.host.display_name,
+            guest = player_name,
+            "Game joined"
+        );
+
+        Some(JoinedGame {
+            game_id: game_id.to_string(),
+            host_name: pending.host.display_name,
+            guest_name: player_name,
+            host_tx: pending.host_tx,
+        })
     }
 
     fn register_player(&self, user_id: &str, tx: broadcast::Sender<ServerMessage>) {
@@ -294,8 +341,38 @@ async fn handle_message(
             let _ = tx.send(ServerMessage::WaitingForOpponent);
         }
         ClientMessage::JoinGame { game_id, player_name } => {
-            info!(player_name, game_id, "Player joining game");
-            todo!("handle_join_game")
+            let Some(joined) = state.join_game(&game_id, player_name, tx.clone()) else {
+                let _ = tx.send(ServerMessage::GameNotFound);
+                return;
+            };
+
+            // Notify host that opponent joined
+            let _ = joined.host_tx.send(ServerMessage::OpponentJoined {
+                opponent_name: joined.guest_name.clone(),
+            });
+
+            // Send GameStart to both players
+            let _ = joined.host_tx.send(ServerMessage::GameStart {
+                opponent: joined.guest_name,
+            });
+            let _ = tx.send(ServerMessage::GameStart {
+                opponent: joined.host_name,
+            });
+
+            // Start round 1
+            if let Some(word) = state.words.get_random().await {
+                let round_msg = ServerMessage::RoundStart {
+                    kanji: word.kanji.clone(),
+                    round: 1,
+                };
+                let _ = joined.host_tx.send(round_msg.clone());
+                let _ = tx.send(round_msg);
+
+                if let Some(mut game) = state.games.get_mut(&joined.game_id) {
+                    game.session.start_round(1, word);
+                }
+                spawn_round_timeout(state.clone(), joined.game_id, 1);
+            }
         }
         ClientMessage::Answer { answer } => {
             let Some(user_id) = &ctx.user_id else {

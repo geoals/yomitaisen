@@ -260,3 +260,46 @@ async fn create_game_returns_game_id_and_waits() {
     // Game ID should be reusable for joining
     assert!(!game_id.is_empty());
 }
+
+#[tokio::test]
+async fn join_game_starts_match() {
+    let url = spawn_test_server().await;
+
+    // Host creates game
+    let (mut host_ws, _) = connect_async(&url).await.unwrap();
+    host_ws.send(create_game_msg("Alice")).await.unwrap();
+
+    let game_id = match recv(&mut host_ws).await {
+        ServerMessage::GameCreated { game_id } => game_id,
+        other => panic!("Expected GameCreated, got {:?}", other),
+    };
+    assert_eq!(recv(&mut host_ws).await, ServerMessage::WaitingForOpponent);
+
+    // Guest joins with game ID
+    let (mut guest_ws, _) = connect_async(&url).await.unwrap();
+    guest_ws.send(join_game_msg(&game_id, "Bob")).await.unwrap();
+
+    // Host receives OpponentJoined then GameStart
+    assert!(matches!(
+        recv(&mut host_ws).await,
+        ServerMessage::OpponentJoined { opponent_name } if opponent_name == "Bob"
+    ));
+    assert!(matches!(recv(&mut host_ws).await, ServerMessage::GameStart { .. }));
+
+    // Guest receives GameStart
+    assert!(matches!(recv(&mut guest_ws).await, ServerMessage::GameStart { .. }));
+
+    // Both receive RoundStart
+    assert!(matches!(recv(&mut host_ws).await, ServerMessage::RoundStart { round: 1, .. }));
+    assert!(matches!(recv(&mut guest_ws).await, ServerMessage::RoundStart { round: 1, .. }));
+}
+
+#[tokio::test]
+async fn join_nonexistent_game_returns_not_found() {
+    let url = spawn_test_server().await;
+    let (mut ws, _) = connect_async(&url).await.unwrap();
+
+    ws.send(join_game_msg("xyz999", "Bob")).await.unwrap();
+
+    assert_eq!(recv(&mut ws).await, ServerMessage::GameNotFound);
+}
