@@ -41,6 +41,23 @@ fn answer_msg(answer: &str) -> Message {
     Message::Text(json.into())
 }
 
+fn create_game_msg(player_name: &str) -> Message {
+    let json = serde_json::to_string(&ClientMessage::CreateGame {
+        player_name: player_name.to_string(),
+    })
+    .unwrap();
+    Message::Text(json.into())
+}
+
+fn join_game_msg(game_id: &str, player_name: &str) -> Message {
+    let json = serde_json::to_string(&ClientMessage::JoinGame {
+        game_id: game_id.to_string(),
+        player_name: player_name.to_string(),
+    })
+    .unwrap();
+    Message::Text(json.into())
+}
+
 async fn recv(ws: &mut WsStream) -> ServerMessage {
     let msg = ws.next().await.unwrap().unwrap();
     serde_json::from_str(msg.to_text().unwrap()).unwrap()
@@ -216,4 +233,30 @@ async fn round_times_out_with_no_winner() {
         next2,
         ServerMessage::RoundStart { round: 2, .. }
     ));
+}
+
+// ============ Ephemeral game tests ============
+
+#[tokio::test]
+async fn create_game_returns_game_id_and_waits() {
+    let url = spawn_test_server().await;
+    let (mut ws, _) = connect_async(&url).await.expect("Failed to connect");
+
+    ws.send(create_game_msg("Alice")).await.unwrap();
+
+    // Should receive GameCreated with a game_id
+    let msg = recv(&mut ws).await;
+    let game_id = match msg {
+        ServerMessage::GameCreated { game_id } => {
+            assert_eq!(game_id.len(), 6); // Short code
+            game_id
+        }
+        other => panic!("Expected GameCreated, got {:?}", other),
+    };
+
+    // Should then receive WaitingForOpponent
+    assert_eq!(recv(&mut ws).await, ServerMessage::WaitingForOpponent);
+
+    // Game ID should be reusable for joining
+    assert!(!game_id.is_empty());
 }

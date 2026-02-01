@@ -1,5 +1,8 @@
+use super::game_id::generate_unique_game_id;
 use super::matchmaking::{Lobby, MatchOutcome};
 use super::messages::{ClientMessage, ServerMessage};
+use super::pending_game::PendingGame;
+use super::player::EphemeralPlayer;
 use super::session::GameSession;
 use crate::game::core::WordRepository;
 use axum::extract::ws::{Message, WebSocket};
@@ -18,6 +21,7 @@ pub struct DuelState {
     player_channels: DashMap<String, broadcast::Sender<ServerMessage>>,
     games: DashMap<String, ActiveGame>,
     player_games: DashMap<String, String>, // user_id -> game_id
+    pending_games: DashMap<String, PendingGame>, // game_id -> pending game
     round_timeout: Duration,
 }
 
@@ -60,6 +64,7 @@ impl DuelState {
             player_channels: DashMap::new(),
             games: DashMap::new(),
             player_games: DashMap::new(),
+            pending_games: DashMap::new(),
             round_timeout: DEFAULT_ROUND_TIMEOUT,
         }
     }
@@ -67,6 +72,20 @@ impl DuelState {
     pub fn with_round_timeout(mut self, timeout: Duration) -> Self {
         self.round_timeout = timeout;
         self
+    }
+
+    /// Create a new ephemeral game and return the game ID
+    fn create_game(
+        &self,
+        player_name: String,
+        tx: broadcast::Sender<ServerMessage>,
+    ) -> String {
+        let game_id = generate_unique_game_id(|id| self.pending_games.contains_key(id));
+        let host = EphemeralPlayer::new(&player_name);
+        let pending = PendingGame::new(game_id.clone(), host, tx);
+        self.pending_games.insert(game_id.clone(), pending);
+        info!(game_id, player_name, "Created pending game");
+        game_id
     }
 
     fn register_player(&self, user_id: &str, tx: broadcast::Sender<ServerMessage>) {
@@ -270,8 +289,9 @@ async fn handle_message(
             handle_join(user_id, tx, state).await;
         }
         ClientMessage::CreateGame { player_name } => {
-            info!(player_name, "Player creating game");
-            todo!("handle_create_game")
+            let game_id = state.create_game(player_name, tx.clone());
+            let _ = tx.send(ServerMessage::GameCreated { game_id });
+            let _ = tx.send(ServerMessage::WaitingForOpponent);
         }
         ClientMessage::JoinGame { game_id, player_name } => {
             info!(player_name, game_id, "Player joining game");
