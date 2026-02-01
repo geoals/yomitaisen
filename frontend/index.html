@@ -419,6 +419,37 @@
         }
       }
 
+      // Sound effects using Web Audio API
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+      function playTone(frequency, duration, type = "sine") {
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        oscillator.frequency.value = frequency;
+        oscillator.type = type;
+
+        gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+
+        oscillator.start(audioCtx.currentTime);
+        oscillator.stop(audioCtx.currentTime + duration);
+      }
+
+      function playWinSound() {
+        playTone(523, 0.1); // C5
+        setTimeout(() => playTone(659, 0.1), 100); // E5
+        setTimeout(() => playTone(784, 0.15), 200); // G5
+      }
+
+      function playLoseSound() {
+        playTone(392, 0.15); // G4
+        setTimeout(() => playTone(330, 0.2), 150); // E4
+      }
+
       function showScreen(screenId) {
         [
           "landing-screen",
@@ -545,8 +576,10 @@
             stopTimer();
             if (msg.winner === playerName) {
               myScore++;
+              playWinSound();
             } else if (msg.winner) {
               theirScore++;
+              playLoseSound();
             }
             updateScores();
 
