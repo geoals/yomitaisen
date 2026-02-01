@@ -30,7 +30,6 @@
         height: auto;
         margin: 0 auto 24px auto;
       }
-      /* Visually hidden but accessible to screen readers */
       .sr-only {
         position: absolute;
         width: 1px;
@@ -80,10 +79,59 @@
         color: #666;
         cursor: not-allowed;
       }
+      button.secondary {
+        background: #333;
+        color: #f0f0f0;
+        border: 1px solid #555;
+      }
+      button.secondary:hover {
+        background: #444;
+      }
+      .divider {
+        text-align: center;
+        color: #666;
+        margin: 20px 0;
+        position: relative;
+      }
+      .divider::before,
+      .divider::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        width: 40%;
+        height: 1px;
+        background: #444;
+      }
+      .divider::before {
+        left: 0;
+      }
+      .divider::after {
+        right: 0;
+      }
       .status {
         text-align: center;
         color: #888;
         padding: 20px;
+      }
+      .game-code {
+        text-align: center;
+        font-size: 2.5rem;
+        font-weight: bold;
+        letter-spacing: 0.3em;
+        color: #dc143c;
+        padding: 20px;
+        background: #252525;
+        border-radius: 8px;
+        margin: 20px 0;
+        font-family: monospace;
+      }
+      .game-code-label {
+        text-align: center;
+        color: #888;
+        margin-bottom: 10px;
+      }
+      .copy-link {
+        margin-top: 12px;
       }
       .kanji {
         font-size: 4rem;
@@ -155,8 +203,12 @@
       .game-over.lose h2 {
         color: #666;
       }
+      .error-message {
+        text-align: center;
+        color: #ff6b6b;
+        padding: 20px;
+      }
 
-      /* Mobile: same card color, no floating effect */
       @media (max-width: 480px) {
         body {
           margin: 0;
@@ -177,20 +229,42 @@
       <img src="logo.svg" alt="" class="logo" aria-hidden="true" />
       <h1 class="sr-only">読み対戦 (Yomitaisen)</h1>
 
-      <!-- Join Screen -->
-      <div id="join-screen">
+      <!-- Landing Screen -->
+      <div id="landing-screen">
         <input
           type="text"
-          id="username"
-          placeholder="Enter username"
+          id="player-name"
+          placeholder="Enter your name"
           autofocus
         />
-        <button id="join-btn" onclick="join()">Join Game</button>
+        <button id="create-btn" onclick="createGame()">Create New Game</button>
+
+        <div class="divider">or join existing</div>
+
+        <input
+          type="text"
+          id="game-code-input"
+          placeholder="Enter game code"
+          maxlength="6"
+          style="text-transform: lowercase"
+        />
+        <button id="join-btn" class="secondary" onclick="joinGame()">
+          Join Game
+        </button>
       </div>
 
-      <!-- Waiting Screen -->
-      <div id="waiting-screen" class="hidden">
+      <!-- Lobby Screen (waiting for opponent) -->
+      <div id="lobby-screen" class="hidden">
+        <div class="game-code-label">Share this code with your friend:</div>
+        <div class="game-code" id="lobby-game-code"></div>
+        <button class="copy-link" onclick="copyLink()">Copy Link</button>
         <div class="status">Waiting for opponent...</div>
+      </div>
+
+      <!-- Error Screen -->
+      <div id="error-screen" class="hidden">
+        <div class="error-message" id="error-message"></div>
+        <button onclick="backToLanding()">Back</button>
       </div>
 
       <!-- Game Screen -->
@@ -200,7 +274,7 @@
           <span id="my-score">0</span> - <span id="their-score">0</span>
         </div>
         <div class="round-info">
-          Round <span id="round-number"></span> · <span id="timer">30</span>s
+          Round <span id="round-number"></span> · <span id="timer">15</span>s
         </div>
         <div class="kanji" id="kanji"></div>
         <input type="text" id="answer" placeholder="Type reading in hiragana" />
@@ -231,12 +305,19 @@
       const WS_URL = "ws://localhost:3000/ws";
       const ROUND_TIMEOUT = 15;
       let ws = null;
-      let username = "";
+      let playerName = "";
       let opponentName = "";
+      let gameId = "";
       let myScore = 0;
       let theirScore = 0;
       let timerInterval = null;
       let timeLeft = ROUND_TIMEOUT;
+
+      // Check URL for game code
+      function getGameCodeFromURL() {
+        const params = new URLSearchParams(window.location.search);
+        return params.get("game") || "";
+      }
 
       function startTimer() {
         stopTimer();
@@ -258,8 +339,9 @@
 
       function showScreen(screenId) {
         [
-          "join-screen",
-          "waiting-screen",
+          "landing-screen",
+          "lobby-screen",
+          "error-screen",
           "game-screen",
           "result-screen",
           "game-over-screen",
@@ -282,38 +364,62 @@
       }
 
       function connect() {
-        ws = new WebSocket(WS_URL);
+        return new Promise((resolve, reject) => {
+          ws = new WebSocket(WS_URL);
 
-        ws.onopen = () => {
-          console.log("Connected to server");
-          setConnectionStatus(true);
-        };
+          ws.onopen = () => {
+            console.log("Connected to server");
+            setConnectionStatus(true);
+            resolve();
+          };
 
-        ws.onclose = () => {
-          console.log("Disconnected from server");
-          setConnectionStatus(false);
-        };
+          ws.onclose = () => {
+            console.log("Disconnected from server");
+            setConnectionStatus(false);
+          };
 
-        ws.onerror = (err) => {
-          console.error("WebSocket error:", err);
-          setConnectionStatus(false);
-        };
+          ws.onerror = (err) => {
+            console.error("WebSocket error:", err);
+            setConnectionStatus(false);
+            reject(err);
+          };
 
-        ws.onmessage = (event) => {
-          const msg = JSON.parse(event.data);
-          console.log("Received:", msg);
-          handleMessage(msg);
-        };
+          ws.onmessage = (event) => {
+            const msg = JSON.parse(event.data);
+            console.log("Received:", msg);
+            handleMessage(msg);
+          };
+        });
       }
 
       function handleMessage(msg) {
         switch (msg.type) {
-          case "waiting":
-            showScreen("waiting-screen");
+          case "game_created":
+            gameId = msg.game_id;
+            document.getElementById("lobby-game-code").textContent =
+              gameId.toUpperCase();
+            // Update URL without reload
+            history.replaceState(null, "", `?game=${gameId}`);
+            break;
+
+          case "waiting_for_opponent":
+            showScreen("lobby-screen");
+            break;
+
+          case "opponent_joined":
+            opponentName = msg.opponent_name;
+            break;
+
+          case "game_not_found":
+            showError("Game not found. Check the code and try again.");
+            break;
+
+          case "game_full":
+            showError("This game is already full.");
             break;
 
           case "game_start":
-            opponentName = msg.opponent;
+            opponentName = opponentName || msg.opponent;
             document.getElementById("opponent-name").textContent = opponentName;
             myScore = 0;
             theirScore = 0;
@@ -333,27 +439,24 @@
 
           case "round_result":
             stopTimer();
-            // Update scores
-            if (msg.winner === username) {
+            if (msg.winner === playerName) {
               myScore++;
             } else if (msg.winner) {
               theirScore++;
             }
             updateScores();
 
-            // Show result briefly
-            const isWinner = msg.winner === username;
+            const isWinner = msg.winner === playerName;
             const resultEl = document.getElementById("result-text");
             resultEl.textContent = msg.winner
               ? isWinner
                 ? "Correct!"
-                : `${msg.winner} got it!`
+                : `${opponentName} got it!`
               : "Time out!";
             resultEl.className = "result " + (isWinner ? "win" : "lose");
             document.getElementById("correct-reading").textContent =
               msg.correct_reading;
             showScreen("result-screen");
-            // Next round will come automatically via round_start or game_end
             break;
 
           case "wrong_answer":
@@ -364,7 +467,7 @@
 
           case "game_end":
             stopTimer();
-            const didWin = msg.winner === username;
+            const didWin = msg.winner === playerName;
             const gameOverContent =
               document.getElementById("game-over-content");
             gameOverContent.className =
@@ -384,32 +487,88 @@
         }
       }
 
-      function join() {
-        username = document.getElementById("username").value.trim();
-        if (!username) {
-          alert("Please enter a username");
+      function showError(message) {
+        document.getElementById("error-message").textContent = message;
+        showScreen("error-screen");
+      }
+
+      function backToLanding() {
+        history.replaceState(null, "", window.location.pathname);
+        showScreen("landing-screen");
+        document.getElementById("create-btn").disabled = false;
+        document.getElementById("join-btn").disabled = false;
+      }
+
+      async function createGame() {
+        playerName = document.getElementById("player-name").value.trim();
+        if (!playerName) {
+          alert("Please enter your name");
           return;
         }
 
-        if (!ws || ws.readyState !== WebSocket.OPEN) {
-          connect();
-          ws.onopen = () => {
-            setConnectionStatus(true);
-            sendJoin();
-          };
-        } else {
-          sendJoin();
+        document.getElementById("create-btn").disabled = true;
+
+        try {
+          if (!ws || ws.readyState !== WebSocket.OPEN) {
+            await connect();
+          }
+          ws.send(
+            JSON.stringify({
+              type: "create_game",
+              player_name: playerName,
+            })
+          );
+        } catch (err) {
+          showError("Could not connect to server");
+          document.getElementById("create-btn").disabled = false;
         }
       }
 
-      function sendJoin() {
-        ws.send(
-          JSON.stringify({
-            type: "join",
-            user_id: username,
-          }),
-        );
+      async function joinGame() {
+        playerName = document.getElementById("player-name").value.trim();
+        const code = document
+          .getElementById("game-code-input")
+          .value.trim()
+          .toLowerCase();
+
+        if (!playerName) {
+          alert("Please enter your name");
+          return;
+        }
+        if (!code || code.length !== 6) {
+          alert("Please enter a valid 6-character game code");
+          return;
+        }
+
         document.getElementById("join-btn").disabled = true;
+
+        try {
+          if (!ws || ws.readyState !== WebSocket.OPEN) {
+            await connect();
+          }
+          ws.send(
+            JSON.stringify({
+              type: "join_game",
+              game_id: code,
+              player_name: playerName,
+            })
+          );
+        } catch (err) {
+          showError("Could not connect to server");
+          document.getElementById("join-btn").disabled = false;
+        }
+      }
+
+      function copyLink() {
+        const url = window.location.href;
+        navigator.clipboard.writeText(url).then(() => {
+          const btn = document.querySelector(".copy-link");
+          const originalText = btn.textContent;
+          btn.textContent = "Copied!";
+          setTimeout(() => {
+            btn.textContent = originalText;
+          }, 2000);
+        });
       }
 
       function submitAnswer() {
@@ -420,20 +579,40 @@
           JSON.stringify({
             type: "answer",
             answer: answer,
-          }),
+          })
         );
         document.getElementById("submit-btn").disabled = true;
       }
 
-      document.getElementById("username").addEventListener("keypress", (e) => {
-        if (e.key === "Enter") join();
-      });
+      // Event listeners
+      document
+        .getElementById("player-name")
+        .addEventListener("keypress", (e) => {
+          if (e.key === "Enter") {
+            const codeInput = document.getElementById("game-code-input").value;
+            if (codeInput) {
+              joinGame();
+            } else {
+              createGame();
+            }
+          }
+        });
+
+      document
+        .getElementById("game-code-input")
+        .addEventListener("keypress", (e) => {
+          if (e.key === "Enter") joinGame();
+        });
 
       document.getElementById("answer").addEventListener("keypress", (e) => {
         if (e.key === "Enter") submitAnswer();
       });
 
-      connect();
+      // Initialize
+      const urlGameCode = getGameCodeFromURL();
+      if (urlGameCode) {
+        document.getElementById("game-code-input").value = urlGameCode;
+      }
     </script>
   </body>
 </html>
