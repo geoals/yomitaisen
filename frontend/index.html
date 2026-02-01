@@ -47,7 +47,7 @@
       body {
         font-family:
           -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        max-width: 400px;
+        max-width: 480px;
         margin: 0 auto;
         padding: 8px 20px 0;
         background: var(--bg-base);
@@ -61,7 +61,7 @@
         display: block;
         width: 280px;
         height: auto;
-        margin: 0 auto 24px auto;
+        margin: 0 auto;
       }
       .sr-only {
         position: absolute;
@@ -203,6 +203,39 @@
         font-size: 0.9rem;
         margin-bottom: 10px;
       }
+      .previous-word {
+        text-align: center;
+        padding: 10px;
+        margin-bottom: 15px;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+      }
+      .previous-word.win {
+        border-color: var(--accent);
+        background: var(--accent-subtle);
+      }
+      .previous-word.lose {
+        border-color: var(--error);
+        background: hsla(335, 55%, 50%, 0.1);
+      }
+      .previous-word.timeout {
+        border-color: var(--border);
+      }
+      .previous-word .prev-kanji {
+        font-size: 1.3rem;
+        font-weight: bold;
+      }
+      .previous-word .prev-reading {
+        color: var(--text-secondary);
+        margin-left: 8px;
+      }
+      .previous-word .prev-result {
+        font-size: 0.85rem;
+        margin-top: 4px;
+        color: var(--text-muted);
+      }
       .connection-status {
         text-align: center;
         font-size: 0.8rem;
@@ -251,7 +284,7 @@
       <h1 class="sr-only">読み対戦 (Yomitaisen)</h1>
 
       <!-- Landing Screen -->
-      <div id="landing-screen">
+      <div id="landing-screen" style="margin-top: 24px;">
         <input
           type="text"
           id="player-name"
@@ -310,8 +343,15 @@
         <div class="round-info">
           Round <span id="round-number"></span> · <span id="timer">15</span>s
         </div>
-        <div class="kanji" id="kanji"></div>
-        <input type="text" id="answer" placeholder="Type reading" />
+        <div class="previous-word hidden" id="previous-word">
+          <div>
+            <span class="prev-kanji" id="prev-kanji" lang="ja"></span>
+            <span class="prev-reading" id="prev-reading" lang="ja"></span>
+          </div>
+          <div class="prev-result" id="prev-result"></div>
+        </div>
+        <div class="kanji" id="kanji" lang="ja"></div>
+        <input type="text" id="answer" placeholder="Type reading" lang="ja" />
         <div style="display: flex; gap: 10px;">
           <button id="submit-btn" onclick="submitAnswer()" style="flex: 1;">Submit</button>
           <button id="skip-btn" class="secondary" onclick="skipRound()" style="width: auto; padding: 12px 20px;">Skip</button>
@@ -322,7 +362,7 @@
       <div id="result-screen" class="hidden">
         <div class="result" id="result-text"></div>
         <div class="correct-answer">
-          Correct: <span id="correct-reading"></span>
+          Correct: <span id="correct-reading" lang="ja"></span>
         </div>
       </div>
 
@@ -352,6 +392,8 @@
       let theirScore = 0;
       let timerInterval = null;
       let timeLeft = ROUND_TIMEOUT;
+      let currentKanji = "";
+      let lastRoundResult = null; // { kanji, reading, winner, isMyWin }
 
       // Check URL for game code
       function getGameCodeFromURL() {
@@ -463,17 +505,36 @@
             document.getElementById("opponent-name").textContent = opponentName;
             myScore = 0;
             theirScore = 0;
+            lastRoundResult = null;
+            currentKanji = "";
             updateScores();
             break;
 
           case "round_start":
             document.getElementById("round-number").textContent = msg.round;
             document.getElementById("kanji").textContent = msg.kanji;
+            currentKanji = msg.kanji;
             document.getElementById("answer").value = "";
             document.getElementById("submit-btn").disabled = false;
             document.getElementById("skip-btn").disabled = false;
             document.getElementById("skip-btn").textContent = "Skip";
             updateScores();
+
+            // Show previous round result (or placeholder on first round)
+            const prevWordEl = document.getElementById("previous-word");
+            if (lastRoundResult) {
+              document.getElementById("prev-kanji").textContent = lastRoundResult.kanji;
+              document.getElementById("prev-reading").textContent = lastRoundResult.reading;
+              document.getElementById("prev-result").textContent = lastRoundResult.resultText;
+              prevWordEl.className = "previous-word " + lastRoundResult.resultClass;
+            } else {
+              document.getElementById("prev-kanji").textContent = "";
+              document.getElementById("prev-reading").textContent = "First to 15 wins!";
+              document.getElementById("prev-result").textContent = "";
+              prevWordEl.className = "previous-word";
+            }
+            prevWordEl.classList.remove("hidden");
+
             showScreen("game-screen");
             document.getElementById("answer").focus();
             startTimer();
@@ -488,17 +549,26 @@
             }
             updateScores();
 
+            // Store result to show on next round
             const isWinner = msg.winner === playerName;
-            const resultEl = document.getElementById("result-text");
-            resultEl.textContent = msg.winner
-              ? isWinner
-                ? "Correct!"
-                : `${opponentName} got it!`
-              : "Time out!";
-            resultEl.className = "result " + (isWinner ? "win" : "lose");
-            document.getElementById("correct-reading").textContent =
-              msg.correct_reading;
-            showScreen("result-screen");
+            let prevResultText, prevResultClass;
+            if (msg.winner) {
+              prevResultText = isWinner ? "✓ You got it!" : `✗ ${opponentName} got it`;
+              prevResultClass = isWinner ? "win" : "lose";
+            } else {
+              prevResultText = "— Skipped";
+              prevResultClass = "timeout";
+            }
+            lastRoundResult = {
+              kanji: currentKanji,
+              reading: msg.correct_reading,
+              resultText: prevResultText,
+              resultClass: prevResultClass
+            };
+
+            // Disable inputs while waiting for next round
+            document.getElementById("submit-btn").disabled = true;
+            document.getElementById("skip-btn").disabled = true;
             break;
 
           case "wrong_answer":
