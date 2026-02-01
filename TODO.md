@@ -2,6 +2,6 @@
 
 ## Operational improvements
 
-- [ ] **Disconnect handling** - When a player leaves mid-game, notify opponent and clean up game state
+- [x] **Disconnect handling** - When a player leaves mid-game, notify opponent and clean up game state
 - [ ] **Round timeout** - End the round after N seconds if no one answers correctly
 - [ ] **Duplicate user prevention** - Reject join request if same username is already connected
