@@ -1,4 +1,4 @@
-use super::messages::{ClientMessage, ServerMessage};
+use crate::game::core::messages::{ClientMessage, ServerMessage};
 use axum::extract::ws::{Message, WebSocket};
 use futures_util::{SinkExt, StreamExt};
 use std::future::Future;

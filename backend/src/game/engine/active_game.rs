@@ -1,5 +1,5 @@
-use super::messages::ServerMessage;
-use super::session::GameSession;
+use crate::game::core::messages::ServerMessage;
+use crate::game::core::session::GameSession;
 use crate::game::core::WordRepository;
 use dashmap::DashMap;
 use std::sync::Arc;

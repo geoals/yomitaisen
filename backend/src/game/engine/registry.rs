@@ -1,7 +1,7 @@
 use super::active_game::{
     continue_or_end_game, spawn_round_timeout, ActiveGame, AnswerResult, DEFAULT_ROUND_TIMEOUT,
 };
-use super::messages::ServerMessage;
+use crate::game::core::messages::ServerMessage;
 use crate::game::core::WordRepository;
 use dashmap::DashMap;
 use std::sync::Arc;

@@ -1,9 +1,9 @@
 use super::lobby::{Lobby, MatchOutcome};
+use crate::game::core::messages::ServerMessage;
+use crate::game::core::session::GameSession;
 use crate::game::core::WordRepository;
-use crate::game::duel::active_game::ActiveGame;
-use crate::game::duel::messages::ServerMessage;
-use crate::game::duel::registry::GameRegistry;
-use crate::game::duel::session::GameSession;
+use crate::game::engine::active_game::ActiveGame;
+use crate::game::engine::registry::GameRegistry;
 use std::sync::Arc;
 use std::time::Duration;
 use dashmap::DashMap;

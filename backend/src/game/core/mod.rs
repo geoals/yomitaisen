@@ -1,3 +1,5 @@
+pub mod messages;
+pub mod session;
 mod word;
 mod word_repository;
 

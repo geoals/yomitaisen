@@ -1,6 +1,6 @@
 use super::state::EphemeralState;
-use crate::game::duel::messages::{ClientMessage, ServerMessage};
-use crate::game::duel::ws::{run_connection, ConnectionContext, ConnectionHandler};
+use crate::game::core::messages::{ClientMessage, ServerMessage};
+use crate::game::engine::ws::{run_connection, ConnectionContext, ConnectionHandler};
 use axum::extract::ws::WebSocket;
 use std::sync::Arc;
 use tokio::sync::broadcast;
