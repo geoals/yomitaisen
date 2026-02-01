@@ -19,7 +19,7 @@ pub struct RoundOutcome {
     pub correct_reading: String,
 }
 
-const WINS_NEEDED: u32 = 2;
+const WINS_NEEDED: u32 = 15;
 
 /// A game session between two players (pure logic, no I/O)
 pub struct GameSession {
@@ -204,22 +204,27 @@ mod tests {
     }
 
     #[test]
-    fn test_first_to_two_wins_game() {
+    fn test_first_to_fifteen_wins_game() {
         let mut session = GameSession::new("alice".to_string(), "bob".to_string());
 
         assert_eq!(session.scores(), (0, 0));
         assert_eq!(session.game_winner(), None);
 
-        session.record_win("alice");
-        assert_eq!(session.scores(), (1, 0));
-        assert_eq!(session.game_winner(), None);
+        // Record 14 wins for alice - should not trigger game end yet
+        for i in 1..=14 {
+            session.record_win("alice");
+            assert_eq!(session.scores(), (i, 0));
+            assert_eq!(session.game_winner(), None);
+        }
 
+        // Bob gets some wins but alice is still ahead
         session.record_win("bob");
-        assert_eq!(session.scores(), (1, 1));
+        assert_eq!(session.scores(), (14, 1));
         assert_eq!(session.game_winner(), None);
 
+        // 15th win for alice triggers game end
         session.record_win("alice");
-        assert_eq!(session.scores(), (2, 1));
+        assert_eq!(session.scores(), (15, 1));
         assert_eq!(session.game_winner(), Some("alice"));
     }
 }
