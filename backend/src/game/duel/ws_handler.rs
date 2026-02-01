@@ -107,7 +107,12 @@ impl DuelState {
 
         // Use display names as player IDs (consistent with authenticated flow)
         let host_name = pending.host.display_name.clone();
-        let guest_name = player_name.clone();
+        // Ensure unique name - append discriminator if same as host
+        let guest_name = if player_name == host_name {
+            format!("{} (2)", player_name)
+        } else {
+            player_name
+        };
 
         let session = GameSession::new(host_name.clone(), guest_name.clone());
         let game = ActiveGame {
@@ -118,21 +123,21 @@ impl DuelState {
 
         self.games.insert(game_id.to_string(), game);
         self.player_games
-            .insert(host_name, game_id.to_string());
+            .insert(host_name.clone(), game_id.to_string());
         self.player_games
-            .insert(guest_name, game_id.to_string());
+            .insert(guest_name.clone(), game_id.to_string());
 
         info!(
             game_id,
-            host = pending.host.display_name,
-            guest = player_name,
+            host = host_name,
+            guest = guest_name,
             "Game joined"
         );
 
         Some(JoinedGame {
             game_id: game_id.to_string(),
-            host_name: pending.host.display_name,
-            guest_name: player_name,
+            host_name,
+            guest_name,
             host_tx: pending.host_tx,
         })
     }
@@ -344,11 +349,12 @@ async fn handle_message(
             let _ = tx.send(ServerMessage::WaitingForOpponent);
         }
         ClientMessage::JoinGame { game_id, player_name } => {
-            ctx.user_id = Some(player_name.clone());
             let Some(joined) = state.join_game(&game_id, player_name, tx.clone()) else {
                 let _ = tx.send(ServerMessage::GameNotFound);
                 return;
             };
+            // Set user_id to the (possibly modified) guest name
+            ctx.user_id = Some(joined.guest_name.clone());
 
             // Notify host that opponent joined
             let _ = joined.host_tx.send(ServerMessage::OpponentJoined {

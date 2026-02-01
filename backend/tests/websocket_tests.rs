@@ -303,3 +303,28 @@ async fn join_nonexistent_game_returns_not_found() {
 
     assert_eq!(recv(&mut ws).await, ServerMessage::GameNotFound);
 }
+
+#[tokio::test]
+async fn duplicate_names_get_discriminator() {
+    let url = spawn_test_server().await;
+
+    // Host creates game as "Alice"
+    let (mut host_ws, _) = connect_async(&url).await.unwrap();
+    host_ws.send(create_game_msg("Alice")).await.unwrap();
+
+    let game_id = match recv(&mut host_ws).await {
+        ServerMessage::GameCreated { game_id } => game_id,
+        other => panic!("Expected GameCreated, got {:?}", other),
+    };
+    assert_eq!(recv(&mut host_ws).await, ServerMessage::WaitingForOpponent);
+
+    // Guest joins with same name "Alice"
+    let (mut guest_ws, _) = connect_async(&url).await.unwrap();
+    guest_ws.send(join_game_msg(&game_id, "Alice")).await.unwrap();
+
+    // Host should see opponent as "Alice (2)"
+    assert!(matches!(
+        recv(&mut host_ws).await,
+        ServerMessage::OpponentJoined { opponent_name } if opponent_name == "Alice (2)"
+    ));
+}
