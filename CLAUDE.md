@@ -71,6 +71,23 @@ Don't over-explain obvious things, but err on the side of teaching when introduc
 - No abbreviations unless universally understood
 - Test names describe the behavior being tested: `test_rejects_invalid_reading`
 
+**Idiomatic Rust:**
+- Early returns with `let ... else` over nested `if let`:
+  ```rust
+  let Some(x) = opt else { return; };
+  ```
+- `?` operator for Option/Result chaining
+- Pattern matching with guards over if-else chains:
+  ```rust
+  match player_id {
+      id if id == self.player1 => self.scores.0 += 1,
+      id if id == self.player2 => self.scores.1 += 1,
+      _ => {}
+  }
+  ```
+- Named structs over tuples when returning multiple values
+- Enums with struct variants for results with context
+
 ### 6. Code Structure
 
 ```
