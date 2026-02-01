@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>読み対戦 - Yomitaisen</title>
+    <script src="https://unpkg.com/wanakana"></script>
     <style>
       * {
         box-sizing: border-box;
@@ -280,7 +281,7 @@
           Round <span id="round-number"></span> · <span id="timer">15</span>s
         </div>
         <div class="kanji" id="kanji"></div>
-        <input type="text" id="answer" placeholder="Type reading in hiragana" />
+        <input type="text" id="answer" placeholder="Type reading (romaji OK)" />
         <button id="submit-btn" onclick="submitAnswer()">Submit</button>
       </div>
 
@@ -583,8 +584,11 @@
       }
 
       function submitAnswer() {
-        const answer = document.getElementById("answer").value.trim();
-        if (!answer) return;
+        const rawAnswer = document.getElementById("answer").value.trim();
+        if (!rawAnswer) return;
+
+        // Normalize: convert romaji/katakana to hiragana
+        const answer = wanakana.toHiragana(rawAnswer, { IMEMode: true });
 
         ws.send(
           JSON.stringify({
@@ -624,6 +628,10 @@
       if (urlGameCode) {
         document.getElementById("game-code-input").value = urlGameCode;
       }
+
+      // Bind wanakana to answer input for real-time romaji→hiragana conversion
+      const answerInput = document.getElementById("answer");
+      wanakana.bind(answerInput, { IMEMode: true });
     </script>
   </body>
 </html>
