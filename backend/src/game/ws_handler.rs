@@ -1,5 +1,7 @@
+use super::matchmaking::{Lobby, MatchOutcome};
+use super::session::GameSession;
 use crate::messages::{ClientMessage, ServerMessage};
-use crate::repository::{Word, WordRepository};
+use crate::repository::WordRepository;
 use axum::extract::ws::{Message, WebSocket};
 use dashmap::DashMap;
 use futures_util::{SinkExt, StreamExt};
@@ -8,29 +10,28 @@ use tokio::sync::broadcast;
 
 pub struct GameState {
     words: WordRepository,
-    waiting_player: std::sync::Mutex<Option<(String, broadcast::Sender<ServerMessage>)>>,
-    games: DashMap<String, Game>,
+    lobby: Lobby,
+    player_channels: DashMap<String, broadcast::Sender<ServerMessage>>,
+    games: DashMap<String, ActiveGame>,
     player_games: DashMap<String, String>, // user_id -> game_id
 }
 
-#[allow(dead_code)]
-struct Game {
-    player1_id: String,
-    player2_id: String,
+/// An active game: combines pure game logic with transport channels
+struct ActiveGame {
+    session: GameSession,
     player1_tx: broadcast::Sender<ServerMessage>,
     player2_tx: broadcast::Sender<ServerMessage>,
-    current_round: u32,
-    current_word: Option<Word>,
 }
 
-impl Game {
+impl ActiveGame {
     fn broadcast(&self, msg: ServerMessage) {
         let _ = self.player1_tx.send(msg.clone());
         let _ = self.player2_tx.send(msg);
     }
 }
 
-enum MatchResult {
+/// Internal result after matching + channel lookup
+enum JoinResult {
     Waiting,
     Matched {
         opponent_id: String,
@@ -43,63 +44,74 @@ impl GameState {
     pub fn new(words: WordRepository) -> Self {
         Self {
             words,
-            waiting_player: std::sync::Mutex::new(None),
+            lobby: Lobby::new(),
+            player_channels: DashMap::new(),
             games: DashMap::new(),
             player_games: DashMap::new(),
         }
     }
 
-    fn try_match(
-        &self,
-        user_id: String,
-        tx: broadcast::Sender<ServerMessage>,
-    ) -> MatchResult {
-        let mut waiting = self.waiting_player.lock().unwrap();
+    fn register_player(&self, user_id: &str, tx: broadcast::Sender<ServerMessage>) {
+        self.player_channels.insert(user_id.to_string(), tx);
+    }
 
-        let Some((opponent_id, opponent_tx)) = waiting.take() else {
-            *waiting = Some((user_id, tx));
-            return MatchResult::Waiting;
-        };
+    fn try_join(&self, user_id: String, tx: broadcast::Sender<ServerMessage>) -> JoinResult {
+        // Register this player's channel
+        self.register_player(&user_id, tx.clone());
 
-        let game_id = uuid::Uuid::new_v4().to_string();
-        let game = Game {
-            player1_id: opponent_id.clone(),
-            player2_id: user_id.clone(),
-            player1_tx: opponent_tx.clone(),
-            player2_tx: tx.clone(),
-            current_round: 0,
-            current_word: None,
-        };
+        // Try matchmaking
+        match self.lobby.try_match(user_id.clone()) {
+            MatchOutcome::Waiting => JoinResult::Waiting,
+            MatchOutcome::Matched { opponent_id } => {
+                // Look up opponent's channel
+                let opponent_tx = self
+                    .player_channels
+                    .get(&opponent_id)
+                    .map(|r| r.clone())
+                    .expect("opponent should have registered channel");
 
-        self.games.insert(game_id.clone(), game);
-        self.player_games.insert(opponent_id.clone(), game_id.clone());
-        self.player_games.insert(user_id, game_id.clone());
+                // Create game
+                let game_id = uuid::Uuid::new_v4().to_string();
+                let session = GameSession::new(opponent_id.clone(), user_id.clone());
+                let game = ActiveGame {
+                    session,
+                    player1_tx: opponent_tx.clone(),
+                    player2_tx: tx,
+                };
 
-        MatchResult::Matched {
-            opponent_id,
-            opponent_tx,
-            game_id,
+                self.games.insert(game_id.clone(), game);
+                self.player_games
+                    .insert(opponent_id.clone(), game_id.clone());
+                self.player_games.insert(user_id, game_id.clone());
+
+                JoinResult::Matched {
+                    opponent_id,
+                    opponent_tx,
+                    game_id,
+                }
+            }
         }
     }
 
-    fn check_answer(&self, user_id: &str, answer: &str) -> Option<ServerMessage> {
+    fn submit_answer(&self, user_id: &str, answer: &str) -> Option<ServerMessage> {
         let game_id = self.player_games.get(user_id)?;
-        let game = self.games.get(&*game_id)?;
+        let mut game = self.games.get_mut(&*game_id)?;
 
-        let word = game.current_word.as_ref()?;
-        if answer != word.reading {
-            return None; // Wrong answer, ignore
-        }
+        let outcome = game.session.submit_answer(user_id, answer)?;
 
         Some(ServerMessage::RoundResult {
-            winner: Some(user_id.to_string()),
-            correct_reading: word.reading.clone(),
+            winner: outcome.winner,
+            correct_reading: outcome.correct_reading,
         })
     }
 
     fn broadcast_to_game(&self, user_id: &str, msg: ServerMessage) {
-        let Some(game_id) = self.player_games.get(user_id) else { return };
-        let Some(game) = self.games.get(&*game_id) else { return };
+        let Some(game_id) = self.player_games.get(user_id) else {
+            return;
+        };
+        let Some(game) = self.games.get(&*game_id) else {
+            return;
+        };
         game.broadcast(msg);
     }
 }
@@ -170,11 +182,11 @@ async fn handle_join(
     tx: &broadcast::Sender<ServerMessage>,
     state: &Arc<GameState>,
 ) {
-    match state.try_match(user_id.clone(), tx.clone()) {
-        MatchResult::Waiting => {
+    match state.try_join(user_id.clone(), tx.clone()) {
+        JoinResult::Waiting => {
             let _ = tx.send(ServerMessage::Waiting);
         }
-        MatchResult::Matched {
+        JoinResult::Matched {
             opponent_id,
             opponent_tx,
             game_id,
@@ -193,8 +205,7 @@ async fn handle_join(
                 let _ = opponent_tx.send(round_msg);
 
                 if let Some(mut game) = state.games.get_mut(&game_id) {
-                    game.current_round = 1;
-                    game.current_word = Some(word);
+                    game.session.start_round(1, word);
                 }
             }
         }
@@ -202,8 +213,8 @@ async fn handle_join(
 }
 
 fn handle_answer(user_id: &str, answer: &str, state: &Arc<GameState>) {
-    let Some(result) = state.check_answer(user_id, answer) else {
-        return; // Wrong answer or no game
+    let Some(result) = state.submit_answer(user_id, answer) else {
+        return;
     };
     state.broadcast_to_game(user_id, result);
 }
