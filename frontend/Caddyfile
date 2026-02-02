@@ -11,9 +11,7 @@
 		reverse_proxy backend:3000
 	}
 
-	handle {
-		root * /srv/frontend
-		try_files {path} /index.html
-		file_server
-	}
+	root * /srv/frontend
+	file_server
+	try_files {path} /index.html
 }
