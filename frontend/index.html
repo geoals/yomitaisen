@@ -385,17 +385,19 @@
         </div>
         <div class="kanji" id="kanji" lang="ja"></div>
         <input type="text" id="answer" placeholder="Type reading" lang="ja" />
-        <button id="submit-btn" onclick="submitAnswer()">
-          Submit
-        </button>
-        <button
-          id="skip-btn"
-          class="secondary"
-          onclick="skipRound()"
-          style="margin-top: 12px"
-        >
-          Skip
-        </button>
+        <div style="display: flex; gap: 16px">
+          <button
+            id="skip-btn"
+            class="secondary"
+            onclick="skipRound()"
+            style="flex: 1"
+          >
+            Skip
+          </button>
+          <button id="submit-btn" onclick="submitAnswer()" style="flex: 1">
+            Submit
+          </button>
+        </div>
       </div>
 
       <!-- Result Screen (brief, between rounds) -->
