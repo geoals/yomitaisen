@@ -12,6 +12,14 @@
 	}
 
 	root * /srv/frontend
-	file_server
-	try_files {path} /index.html
+
+	@static file
+	handle @static {
+		file_server
+	}
+
+	handle {
+		rewrite * /index.html
+		file_server
+	}
 }
