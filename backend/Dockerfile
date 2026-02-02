@@ -1,33 +1,22 @@
 # syntax=docker/dockerfile:1.4
 
-# Build stage
-FROM rust:1.84-bookworm AS builder
-RUN rustup default nightly-2026-01-28
+FROM rust:1.84-bookworm AS chef
+RUN rustup default nightly-2026-01-28 && cargo install cargo-chef
 WORKDIR /app
 
-# 1. Copy manifests only (cached unless deps change)
-COPY Cargo.toml Cargo.lock ./
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
 
-# 2. Create dummy lib.rs + main.rs and build dependencies
-RUN mkdir src && echo '' > src/lib.rs && echo 'fn main() {}' > src/main.rs
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    cargo build --release
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+COPY . .
+RUN cargo build --release
 
-# 3. Remove dummy, copy real source + migrations (needed at compile time by sqlx)
-RUN rm -rf src target/release/.fingerprint target/release/deps/yomitaisen* target/release/yomitaisen*
-COPY src ./src
-COPY migrations ./migrations
-
-# 4. Build real binary (deps already compiled)
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    cargo build --release
-
-# Runtime stage
 FROM debian:bookworm-slim
 WORKDIR /app
-
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-
 COPY --from=builder /app/target/release/yomitaisen ./yomitaisen
 COPY --from=builder /app/migrations ./migrations
 
