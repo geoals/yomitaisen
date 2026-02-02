@@ -13,9 +13,10 @@ RUN mkdir src && echo '' > src/lib.rs && echo 'fn main() {}' > src/main.rs
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cargo build --release
 
-# 3. Remove dummy artifacts that would conflict, copy real source
+# 3. Remove dummy, copy real source + migrations (needed at compile time by sqlx)
 RUN rm -rf src target/release/.fingerprint target/release/deps/yomitaisen* target/release/yomitaisen*
 COPY src ./src
+COPY migrations ./migrations
 
 # 4. Build real binary (deps already compiled)
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
@@ -28,7 +29,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/target/release/yomitaisen ./yomitaisen
-COPY migrations ./migrations
+COPY --from=builder /app/migrations ./migrations
 
 ENV PORT=3000
 ENV DATABASE_URL=sqlite:/app/data/data.db?mode=rwc
