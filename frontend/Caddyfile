@@ -11,15 +11,13 @@
 		reverse_proxy backend:3000
 	}
 
-	root * /srv/frontend
-
-	@static file
-	handle @static {
-		file_server
+	handle /logo.png {
+		respond "LOGO ROUTE MATCHED" 200
 	}
 
 	handle {
-		rewrite * /index.html
+		root * /srv/frontend
+		try_files {path} /index.html
 		file_server
 	}
 }
