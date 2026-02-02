@@ -4,14 +4,23 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ClientMessage {
     // Authenticated matchmaking
-    Join { user_id: String },
+    Join {
+        user_id: String,
+    },
 
     // Ephemeral create/join
-    CreateGame { player_name: String },
-    JoinGame { game_id: String, player_name: String },
+    CreateGame {
+        player_name: String,
+    },
+    JoinGame {
+        game_id: String,
+        player_name: String,
+    },
 
     // Shared
-    Answer { answer: String },
+    Answer {
+        answer: String,
+    },
     Skip,
     RequestRematch,
 }
@@ -23,23 +32,39 @@ pub enum ServerMessage {
     Waiting,
 
     // Ephemeral create/join
-    GameCreated { game_id: String },
+    GameCreated {
+        game_id: String,
+    },
     WaitingForOpponent,
-    OpponentJoined { opponent_name: String },
+    OpponentJoined {
+        opponent_name: String,
+    },
     GameFull,
     GameNotFound,
 
     // Shared game flow
-    GameStart { opponent: String },
-    RoundStart { kanji: String, round: u32 },
-    RoundResult { winner: Option<String>, correct_reading: String },
+    GameStart {
+        opponent: String,
+    },
+    RoundStart {
+        kanji: String,
+        round: u32,
+    },
+    RoundResult {
+        winner: Option<String>,
+        correct_reading: String,
+    },
     WrongAnswer,
     SkipWaiting,
     RematchWaiting,
     OpponentDisconnected,
-    GameEnd { winner: Option<String> },
+    GameEnd {
+        winner: Option<String>,
+    },
     #[allow(dead_code)]
-    Error { message: String },
+    Error {
+        message: String,
+    },
 }
 
 #[cfg(test)]
