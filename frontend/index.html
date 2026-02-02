@@ -64,12 +64,13 @@
       }
       .logo {
         display: block;
-        width: 280px;
+        width: 440px;
+        max-width: 100%;
         height: auto;
         margin: 0 auto;
       }
       .logo.in-game {
-        width: 180px;
+        width: 320px;
       }
       .sr-only {
         position: absolute;
@@ -302,7 +303,7 @@
   <body>
     <div class="card">
       <img
-        src="logo.svg"
+        src="logo.png"
         alt=""
         class="logo"
         aria-hidden="true"
@@ -384,19 +385,17 @@
         </div>
         <div class="kanji" id="kanji" lang="ja"></div>
         <input type="text" id="answer" placeholder="Type reading" lang="ja" />
-        <div style="display: flex; gap: 16px">
-          <button id="submit-btn" onclick="submitAnswer()" style="flex: 1">
-            Submit
-          </button>
-          <button
-            id="skip-btn"
-            class="secondary"
-            onclick="skipRound()"
-            style="width: auto; padding: 12px 20px"
-          >
-            Skip
-          </button>
-        </div>
+        <button id="submit-btn" onclick="submitAnswer()">
+          Submit
+        </button>
+        <button
+          id="skip-btn"
+          class="secondary"
+          onclick="skipRound()"
+          style="margin-top: 12px"
+        >
+          Skip
+        </button>
       </div>
 
       <!-- Result Screen (brief, between rounds) -->
@@ -495,6 +494,39 @@
       function playLoseSound() {
         playTone(392, 0.15); // G4
         setTimeout(() => playTone(330, 0.2), 150); // E4
+      }
+
+      function playSkipSound() {
+        playTone(294, 0.12); // D4 - neutral, lower tone
+        setTimeout(() => playTone(262, 0.15), 100); // C4
+      }
+
+      function playCountdownBeep() {
+        playTone(440, 0.08); // A4 - short tick
+      }
+
+      function playCountdownGo() {
+        playTone(880, 0.15); // A5 - higher pitch for "go"
+      }
+
+      function runCountdown(onComplete) {
+        const kanjiEl = document.getElementById("kanji");
+        let count = 3;
+
+        kanjiEl.textContent = count;
+        playCountdownBeep();
+
+        const interval = setInterval(() => {
+          count--;
+          if (count > 0) {
+            kanjiEl.textContent = count;
+            playCountdownBeep();
+          } else {
+            clearInterval(interval);
+            playCountdownGo();
+            onComplete();
+          }
+        }, 1000);
       }
 
       function showScreen(screenId) {
@@ -599,11 +631,10 @@
 
           case "round_start":
             document.getElementById("round-number").textContent = msg.round;
-            document.getElementById("kanji").textContent = msg.kanji;
             currentKanji = msg.kanji;
             document.getElementById("answer").value = "";
-            document.getElementById("submit-btn").disabled = false;
-            document.getElementById("skip-btn").disabled = false;
+            document.getElementById("submit-btn").disabled = true;
+            document.getElementById("skip-btn").disabled = true;
             document.getElementById("skip-btn").textContent = "Skip";
             updateScores();
 
@@ -628,8 +659,23 @@
             prevWordEl.classList.remove("hidden");
 
             showScreen("game-screen");
-            document.getElementById("answer").focus();
-            startTimer();
+
+            // Run 3-2-1 countdown only for round 1
+            if (msg.round === 1) {
+              runCountdown(() => {
+                document.getElementById("kanji").textContent = currentKanji;
+                document.getElementById("submit-btn").disabled = false;
+                document.getElementById("skip-btn").disabled = false;
+                document.getElementById("answer").focus();
+                startTimer();
+              });
+            } else {
+              document.getElementById("kanji").textContent = currentKanji;
+              document.getElementById("submit-btn").disabled = false;
+              document.getElementById("skip-btn").disabled = false;
+              document.getElementById("answer").focus();
+              startTimer();
+            }
             break;
 
           case "round_result":
@@ -640,6 +686,8 @@
             } else if (msg.winner) {
               theirScore++;
               playLoseSound();
+            } else {
+              playSkipSound();
             }
             updateScores();
 
