@@ -11,5 +11,15 @@ services:
       - sqlite_data:/app/data
     restart: unless-stopped
 
+  caddy:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    expose:
+      - "80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
 volumes:
   sqlite_data:
