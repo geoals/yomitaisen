@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.4
+
 # Stage 1: Install cargo-chef with pinned nightly
 FROM rust:1.84-bookworm AS chef
 RUN rustup default nightly-2026-01-28
@@ -13,9 +15,14 @@ RUN cargo chef prepare --recipe-path recipe.json
 # Stage 3: Build dependencies (cached) then application
 FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/app/target \
+    cargo chef cook --release --recipe-path recipe.json
 COPY . .
-RUN cargo build --release
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/app/target \
+    cargo build --release && \
+    cp target/release/yomitaisen /app/yomitaisen-bin
 
 # Stage 4: Runtime
 FROM debian:bookworm-slim
@@ -24,7 +31,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/target/release/yomitaisen .
+COPY --from=builder /app/yomitaisen-bin ./yomitaisen
 COPY --from=builder /app/migrations ./migrations
 
 ENV PORT=3000
