@@ -8,8 +8,8 @@ WORKDIR /app
 # 1. Copy manifests only (cached unless deps change)
 COPY Cargo.toml Cargo.lock ./
 
-# 2. Create dummy main.rs and build dependencies
-RUN mkdir src && echo 'fn main() {}' > src/main.rs
+# 2. Create dummy lib.rs + main.rs and build dependencies
+RUN mkdir src && echo '' > src/lib.rs && echo 'fn main() {}' > src/main.rs
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/app/target \
     cargo build --release
@@ -18,10 +18,10 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 RUN rm -rf src
 COPY src ./src
 
-# 4. Touch main.rs to invalidate cache, build real binary
+# 4. Touch sources to invalidate cache, build real binary
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/app/target \
-    touch src/main.rs && \
+    touch src/lib.rs src/main.rs && \
     cargo build --release && \
     cp target/release/yomitaisen /app/yomitaisen-bin
 
