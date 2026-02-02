@@ -8,7 +8,7 @@ use axum::{
     response::Response,
     routing::get,
 };
-use game::{ephemeral::EphemeralState, matchmaking::MatchmakingState, WordRepository};
+use game::{WordRepository, ephemeral::EphemeralState, matchmaking::MatchmakingState};
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use std::time::Duration;
