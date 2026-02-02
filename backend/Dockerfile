@@ -11,19 +11,15 @@ COPY Cargo.toml Cargo.lock ./
 # 2. Create dummy lib.rs + main.rs and build dependencies
 RUN mkdir src && echo '' > src/lib.rs && echo 'fn main() {}' > src/main.rs
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/app/target \
     cargo build --release
 
-# 3. Remove dummy, copy real source
-RUN rm -rf src
+# 3. Remove dummy artifacts that would conflict, copy real source
+RUN rm -rf src target/release/.fingerprint target/release/deps/yomitaisen* target/release/yomitaisen*
 COPY src ./src
 
-# 4. Touch sources to invalidate cache, build real binary
+# 4. Build real binary (deps already compiled)
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/app/target \
-    touch src/lib.rs src/main.rs && \
-    cargo build --release && \
-    cp target/release/yomitaisen /app/yomitaisen-bin
+    cargo build --release
 
 # Runtime stage
 FROM debian:bookworm-slim
@@ -31,7 +27,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/yomitaisen-bin ./yomitaisen
+COPY --from=builder /app/target/release/yomitaisen ./yomitaisen
 COPY migrations ./migrations
 
 ENV PORT=3000
