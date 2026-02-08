@@ -168,6 +168,9 @@ impl GameRegistry {
                 return;
             };
 
+            // Capture round number before record_skip potentially ends the round
+            let current_round_number = game.session.current_round_number();
+
             let Some(result) = game.session.record_skip(user_id) else {
                 return;
             };
@@ -185,7 +188,7 @@ impl GameRegistry {
                 SkipResult::BothSkipped(outcome) => {
                     info!(user_id, "Both players skipped, ending round");
                     let game_winner = game.session.game_winner().map(|s| s.to_string());
-                    let round_number = game.session.scores().0 + game.session.scores().1;
+                    let round_number = current_round_number.unwrap_or(0);
 
                     game.broadcast(ServerMessage::RoundResult {
                         winner: outcome.winner,
