@@ -423,11 +423,11 @@
     </div>
 
     <script>
-      // Use relative WebSocket URL in production, direct URL for local file:// dev
+      // WebSocket URL: local dev uses localhost, production uses dedicated API domain
       const WS_URL =
         window.location.protocol === "file:"
           ? "ws://localhost:3000/ws/ephemeral"
-          : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws/ephemeral`;
+          : "wss://api.yomi.alsvik.cloud/ws/ephemeral";
       const ROUND_TIMEOUT = 15;
       let ws = null;
       let playerName = "";
