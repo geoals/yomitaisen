@@ -7,7 +7,7 @@ use std::time::Duration;
 use tokio::sync::broadcast;
 use tracing::info;
 
-pub const DEFAULT_ROUND_TIMEOUT: Duration = Duration::from_secs(15);
+pub const DEFAULT_ROUND_TIMEOUT: Duration = Duration::from_secs(30);
 pub const MAX_ROUNDS: u32 = 30;
 
 /// An active game: combines pure game logic with transport channels
