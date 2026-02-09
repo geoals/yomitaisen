@@ -18,6 +18,10 @@
 - [ ] **Reconnection handling** - Allow players to reconnect to ongoing games after disconnect
 - [ ] **Prevent duplicate words** - Don't show the same word twice in the same game
 
+## Dictionary Quality
+
+- [ ] **Frequency data per kanji form** - Currently frequency data is per word, not per specific kanji form. Example: 寇 (こう) was shown as a question, but this is an extremely rare writing of a common word. Need frequency data tied to the actual kanji representation, not just the word/reading pair. This would allow filtering out obscure writings while keeping common ones.
+
 ## Bug Fixes
 
 - [ ] **Duplicate user prevention** - Reject join if same username already connected
