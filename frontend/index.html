@@ -57,7 +57,13 @@
         padding: 8px 20px 0;
         background: var(--bg-base);
         color: var(--text-primary);
-        min-height: 100vh;
+        min-height: 100dvh;
+        min-height: 100vh; /* fallback for browsers without dvh support */
+      }
+      @supports (min-height: 100dvh) {
+        body {
+          min-height: 100dvh;
+        }
       }
       .card {
         padding: 0;
@@ -83,7 +89,7 @@
         border: 0;
       }
       .hidden {
-        display: none;
+        display: none !important;
       }
       input[type="text"] {
         width: 100%;
@@ -95,6 +101,7 @@
         margin-bottom: 16px;
         background: var(--bg-elevated);
         color: var(--text-primary);
+        flex-shrink: 0;
       }
       input[type="text"]:focus {
         outline: none;
@@ -180,14 +187,26 @@
       .copy-link {
         margin-top: 16px;
       }
+      #game-screen {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
       .kanji {
-        font-size: 4rem;
+        font-size: 3rem;
         text-align: center;
-        padding: 30px;
+        padding: 16px;
+        line-height: 1;
         background: var(--bg-elevated);
         border-radius: 8px;
         margin-bottom: 16px;
         border: 1px solid var(--border-subtle);
+        flex-shrink: 1;
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
       .opponent {
         text-align: center;
@@ -385,7 +404,7 @@
         </div>
         <div class="kanji" id="kanji" lang="ja"></div>
         <input type="text" id="answer" placeholder="Type reading" lang="ja" />
-        <div style="display: flex; gap: 16px">
+        <div style="display: flex; gap: 16px; flex-shrink: 0">
           <button
             id="skip-btn"
             class="secondary"
