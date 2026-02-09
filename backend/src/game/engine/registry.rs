@@ -34,6 +34,7 @@ impl GameRegistry {
         }
     }
 
+
     /// Broadcast a message to both players in a game
     pub fn broadcast_to_game(&self, user_id: &str, msg: ServerMessage) {
         let Some(game_id) = self.player_games.get(user_id) else {

@@ -1,4 +1,5 @@
 use super::game_id::generate_unique_game_id;
+use super::lobby::{LobbyGame, LobbyList};
 use super::pending_game::PendingGame;
 use super::player::EphemeralPlayer;
 use crate::game::core::messages::ServerMessage;
@@ -97,5 +98,27 @@ impl EphemeralState {
         if let Some(info) = self.registry.remove_player_from_game(user_id) {
             info.game.broadcast(ServerMessage::OpponentDisconnected);
         }
+    }
+
+    /// List pending games that are newer than max_age_secs
+    pub fn list_pending_games(&self, max_age_secs: u64) -> LobbyList {
+        let games = self
+            .pending_games
+            .iter()
+            .filter_map(|entry| {
+                let age_secs = entry.created_at.elapsed().as_secs();
+                if age_secs <= max_age_secs {
+                    Some(LobbyGame {
+                        game_id: entry.game_id.clone(),
+                        host_name: entry.host.display_name.clone(),
+                        created_at_secs: age_secs,
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        LobbyList { games }
     }
 }

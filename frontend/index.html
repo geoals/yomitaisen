@@ -312,6 +312,134 @@
         padding: 20px;
       }
 
+      /* Lobby styles */
+      .lobby-section {
+        margin-top: 20px;
+      }
+      .lobby-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+      .lobby-header h3 {
+        margin: 0;
+        font-size: 0.95rem;
+        color: var(--text-secondary);
+        font-weight: 500;
+      }
+      .refresh-btn {
+        width: auto;
+        padding: 6px 12px;
+        font-size: 0.8rem;
+        background: var(--secondary-bg);
+        border: 1px solid var(--secondary-border);
+      }
+      .refresh-btn:hover {
+        background: var(--secondary-hover);
+      }
+      .lobby-list {
+        max-height: 200px;
+        overflow-y: auto;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--bg-elevated);
+      }
+      .lobby-empty {
+        padding: 20px;
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+      }
+      .lobby-game {
+        padding: 12px 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--border-subtle);
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .lobby-game:last-child {
+        border-bottom: none;
+      }
+      .lobby-game:hover {
+        background: var(--bg-surface);
+      }
+      .lobby-game-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .lobby-game-host {
+        font-weight: 500;
+        color: var(--text-primary);
+      }
+      .lobby-game-code {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        font-family: monospace;
+        letter-spacing: 0.1em;
+      }
+      .lobby-game-time {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+      }
+
+      /* Quick join modal */
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: 20px;
+      }
+      .modal-content {
+        background: var(--bg-elevated);
+        border-radius: 12px;
+        padding: 24px;
+        max-width: 360px;
+        width: 100%;
+        position: relative;
+        border: 1px solid var(--border);
+      }
+      .modal-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        font-size: 1.5rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+      }
+      .modal-close:hover {
+        background: var(--bg-surface);
+        color: var(--text-primary);
+      }
+      .modal-title {
+        font-size: 1.2rem;
+        font-weight: 600;
+        margin-bottom: 20px;
+        padding-right: 32px;
+      }
+      .modal-content input[type="text"] {
+        margin-bottom: 16px;
+      }
+
       @media (max-width: 480px) {
         body {
           padding: 8px 16px 0;
@@ -357,6 +485,17 @@
           <button id="join-btn" class="secondary" onclick="joinGame()">
             Join Game
           </button>
+
+          <!-- Lobby section -->
+          <div id="lobby-section" class="lobby-section">
+            <div class="lobby-header">
+              <h3>Open Games</h3>
+              <button class="refresh-btn" onclick="fetchLobby()">Refresh</button>
+            </div>
+            <div id="lobby-list" class="lobby-list">
+              <div class="lobby-empty">Loading...</div>
+            </div>
+          </div>
         </div>
 
         <!-- Invite: Join game flow (shown when ?game=CODE in URL) -->
@@ -439,6 +578,21 @@
       </div>
 
       <div class="connection-status" id="connection-status">Disconnected</div>
+
+      <!-- Quick Join Modal -->
+      <div id="quick-join-modal" class="modal-overlay hidden" onclick="hideQuickJoinModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+          <button class="modal-close" onclick="hideQuickJoinModal()">&times;</button>
+          <div class="modal-title">Join <span id="modal-host-name"></span>'s game</div>
+          <input
+            type="text"
+            id="quick-join-name"
+            placeholder="Enter your name"
+            onkeypress="if(event.key==='Enter') quickJoin()"
+          />
+          <button onclick="quickJoin()">Join Game</button>
+        </div>
+      </div>
     </div>
 
     <script>
@@ -447,8 +601,15 @@
         window.location.protocol === "file:"
           ? "ws://localhost:3000/ws/ephemeral"
           : "wss://yomi-api.alsvik.cloud/ws/ephemeral";
+      const API_URL =
+        window.location.protocol === "file:"
+          ? "http://localhost:3000"
+          : "https://yomi-api.alsvik.cloud";
       const ROUND_TIMEOUT = 30;
+      const LOBBY_POLL_INTERVAL = 10000; // 10 seconds
       let ws = null;
+      let lobbyPollInterval = null;
+      let selectedGameId = null;
       let playerName = "";
       let opponentName = "";
       let gameId = "";
@@ -825,6 +986,7 @@
         }
 
         document.getElementById("create-btn").disabled = true;
+        stopLobbyPolling();
 
         try {
           if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -839,6 +1001,7 @@
         } catch (err) {
           showError("Could not connect to server");
           document.getElementById("create-btn").disabled = false;
+          startLobbyPolling();
         }
       }
 
@@ -863,6 +1026,7 @@
 
         document.getElementById("join-btn").disabled = true;
         document.getElementById("join-invite-btn").disabled = true;
+        stopLobbyPolling();
 
         try {
           if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -879,6 +1043,7 @@
           showError("Could not connect to server");
           document.getElementById("join-btn").disabled = false;
           document.getElementById("join-invite-btn").disabled = false;
+          startLobbyPolling();
         }
       }
 
@@ -958,6 +1123,7 @@
         document.getElementById("join-flow").classList.add("hidden");
         document.getElementById("game-code-input").value = "";
         history.replaceState(null, "", window.location.pathname);
+        startLobbyPolling();
       }
 
       function showJoinFlow(code) {
@@ -968,6 +1134,119 @@
           code.toUpperCase();
         document.getElementById("game-code-input").value = code;
         document.getElementById("player-name-join").focus();
+      }
+
+      // Lobby functions
+      async function fetchLobby() {
+        try {
+          const response = await fetch(`${API_URL}/lobby`);
+          if (!response.ok) throw new Error("Failed to fetch lobby");
+          const data = await response.json();
+          renderLobby(data.games);
+        } catch (err) {
+          console.error("Lobby fetch error:", err);
+          renderLobby([]);
+        }
+      }
+
+      function renderLobby(games) {
+        const listEl = document.getElementById("lobby-list");
+        if (!games || games.length === 0) {
+          listEl.innerHTML = '<div class="lobby-empty">No open games</div>';
+          return;
+        }
+
+        listEl.innerHTML = games
+          .map((game) => {
+            const waitTime = formatWaitTime(game.created_at_secs);
+            return `
+              <div class="lobby-game" onclick="showQuickJoinModal('${game.game_id}', '${escapeHtml(game.host_name)}')">
+                <div class="lobby-game-info">
+                  <span class="lobby-game-host">${escapeHtml(game.host_name)}</span>
+                  <span class="lobby-game-code">${game.game_id.toUpperCase()}</span>
+                </div>
+                <span class="lobby-game-time">${waitTime}</span>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      function formatWaitTime(seconds) {
+        if (seconds < 60) return "just now";
+        const minutes = Math.floor(seconds / 60);
+        return `${minutes}m ago`;
+      }
+
+      function escapeHtml(text) {
+        const div = document.createElement("div");
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      function startLobbyPolling() {
+        stopLobbyPolling();
+        fetchLobby();
+        lobbyPollInterval = setInterval(fetchLobby, LOBBY_POLL_INTERVAL);
+      }
+
+      function stopLobbyPolling() {
+        if (lobbyPollInterval) {
+          clearInterval(lobbyPollInterval);
+          lobbyPollInterval = null;
+        }
+      }
+
+      function showQuickJoinModal(gameId, hostName) {
+        selectedGameId = gameId;
+        document.getElementById("modal-host-name").textContent = hostName;
+        // Pre-fill name if already entered
+        const existingName = document.getElementById("player-name").value.trim();
+        const quickJoinInput = document.getElementById("quick-join-name");
+        quickJoinInput.value = existingName;
+        document.getElementById("quick-join-modal").classList.remove("hidden");
+        quickJoinInput.focus();
+      }
+
+      function hideQuickJoinModal(event) {
+        // If called from overlay click, only close if clicking overlay itself
+        if (event && event.target !== event.currentTarget) return;
+        document.getElementById("quick-join-modal").classList.add("hidden");
+        selectedGameId = null;
+      }
+
+      async function quickJoin() {
+        playerName = document.getElementById("quick-join-name").value.trim();
+        if (!playerName) {
+          alert("Please enter your name");
+          return;
+        }
+        if (!selectedGameId) return;
+
+        // Capture game ID before hiding modal (which clears selectedGameId)
+        const gameId = selectedGameId;
+
+        // Also update the main name field for consistency
+        document.getElementById("player-name").value = playerName;
+
+        hideQuickJoinModal();
+        stopLobbyPolling();
+
+        try {
+          if (!ws || ws.readyState !== WebSocket.OPEN) {
+            await connect();
+          }
+          ws.send(
+            JSON.stringify({
+              type: "join_game",
+              game_id: gameId,
+              player_name: playerName,
+            }),
+          );
+        } catch (err) {
+          showError("Could not connect to server");
+          startLobbyPolling();
+        }
       }
 
       // Initialize
@@ -984,6 +1263,9 @@
         } else {
           showJoinFlow(urlGameCode);
         }
+      } else {
+        // No game code in URL, start lobby polling
+        startLobbyPolling();
       }
 
       // Bind wanakana to answer input for real-time romaji→hiragana conversion
