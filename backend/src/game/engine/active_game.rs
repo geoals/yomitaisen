@@ -178,6 +178,7 @@ pub async fn continue_or_end_game(
     };
 
     let next_round = round_number + 1;
+    let readings = words.get_readings_for_kanji(&word.kanji).await;
     info!(
         round = next_round,
         kanji = word.kanji,
@@ -188,6 +189,7 @@ pub async fn continue_or_end_game(
         game.broadcast(ServerMessage::RoundStart {
             kanji: word.kanji.clone(),
             round: next_round,
+            readings,
         });
         game.session.start_round(next_round, word);
     }

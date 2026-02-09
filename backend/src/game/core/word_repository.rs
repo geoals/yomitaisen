@@ -36,4 +36,13 @@ impl WordRepository {
             .flatten()
             .is_some()
     }
+
+    /// Get all valid readings for a given kanji.
+    pub async fn get_readings_for_kanji(&self, kanji: &str) -> Vec<String> {
+        sqlx::query_scalar::<_, String>("SELECT reading FROM words WHERE kanji = ?")
+            .bind(kanji)
+            .fetch_all(&self.pool)
+            .await
+            .unwrap_or_default()
+    }
 }

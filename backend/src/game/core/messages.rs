@@ -49,6 +49,7 @@ pub enum ServerMessage {
     RoundStart {
         kanji: String,
         round: u32,
+        readings: Vec<String>,
     },
     RoundResult {
         winner: Option<String>,

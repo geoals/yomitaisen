@@ -225,6 +225,8 @@ impl GameRegistry {
             return;
         };
 
+        let readings = self.words.get_readings_for_kanji(&word.kanji).await;
+
         info!(
             game_id,
             kanji = word.kanji,
@@ -235,6 +237,7 @@ impl GameRegistry {
         let round_msg = ServerMessage::RoundStart {
             kanji: word.kanji.clone(),
             round: 1,
+            readings,
         };
         let _ = player1_tx.send(round_msg.clone());
         let _ = player2_tx.send(round_msg);

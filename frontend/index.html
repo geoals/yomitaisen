@@ -457,6 +457,7 @@
       let timerInterval = null;
       let timeLeft = ROUND_TIMEOUT;
       let currentKanji = "";
+      let currentReadings = []; // Valid readings for auto-submit
       let lastRoundResult = null; // { kanji, reading, winner, isMyWin }
 
       // Check URL for game code
@@ -653,6 +654,7 @@
           case "round_start":
             document.getElementById("round-number").textContent = msg.round;
             currentKanji = msg.kanji;
+            currentReadings = msg.readings || [];
             document.getElementById("answer").value = "";
             document.getElementById("submit-btn").disabled = true;
             document.getElementById("skip-btn").disabled = true;
@@ -987,6 +989,14 @@
       // Bind wanakana to answer input for real-time romaji→hiragana conversion
       const answerInput = document.getElementById("answer");
       wanakana.bind(answerInput, { IMEMode: true });
+
+      // Auto-submit when input matches a valid reading
+      answerInput.addEventListener("input", () => {
+        const value = answerInput.value.trim();
+        if (value && currentReadings.includes(value)) {
+          submitAnswer();
+        }
+      });
     </script>
   </body>
 </html>
